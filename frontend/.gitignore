@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+
+# Local env (keep .env.example)
+.env
+.env.local
+.env.*.local
+
+# Logs / OS / IDE
+*.log
+.DS_Store
+.idea/
+.vscode/
+*.tsbuildinfo
