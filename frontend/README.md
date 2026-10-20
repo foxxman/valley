@@ -44,19 +44,19 @@ npm run preview
 
 - **W / A / S / D** или **стрелки** — перемещение
 - Спрайт персонажа — Kenney Roguelike Characters (лёгкий bounce по вертикали)
-- Трава / вода / берег (прямой, углы, канал, тупик) — Kenney + custom
+- Трава / вода / берег (прямой, внешний и внутренний угол) — Kenney + custom
 
 ## Ассеты
 
-Лежат в `public/assets/` (раздаются статикой Vite):
+Лежат в `public/assets/` (раздаются статикой Vite), по одному файлу на рисунок. Повороты берега делает код, отдельные копии на стороны света не хранятся.
 
 ```text
 public/assets/
-  game/                         # выбранные текстуры для игры
-  kenney_roguelike-rpg-pack/    # трава / вода
-  kenney_roguelike-characters/  # персонаж
-  kenney_tiny-town/
-  kenney_tiny-farm/
+  player.png
+  soil/grass.png
+  stones/
+  vegetation/          # деревья, цветы, пучок травы, lily.png
+  water/
 ```
 
 Лицензия паков Kenney: **CC0**. Источники выбранных кадров — в [`public/assets/README.md`](./public/assets/README.md).
@@ -70,8 +70,7 @@ public/assets/
 |------------|--------------|----------|
 | `VITE_DEV_PORT` | `5173` | Порт dev-сервера (`npm run dev`) |
 | `VITE_PREVIEW_PORT` | `4173` | Порт preview (`npm run preview`) |
-| `VITE_WORLD_WIDTH` | `48` | Ширина мира в тайлах |
-| `VITE_WORLD_HEIGHT` | `32` | Высота мира в тайлах |
+| `VITE_CHUNK_SIZE` | `16` | Сторона чанка в тайлах |
 | `VITE_TILE_SIZE` | `32` | Размер тайла на экране (исходные PNG — 16×16, масштабируются) |
 | `VITE_WORLD_SEED` | `42` | Сид генерации мира (одинаковый сид → одинаковая карта) |
 | `VITE_PLAYER_SPEED` | `160` | Скорость персонажа (пиксели в секунду) |
@@ -82,7 +81,7 @@ public/assets/
 
 ```text
 frontend/
-  public/assets/            # Kenney-паки и curated-текстуры
+  public/assets/            # curated-текстуры 16×16
   src/
     main.ts
     game/
@@ -91,11 +90,12 @@ frontend/
       env.ts
       scenes/WorldScene.ts
       entities/Player.ts
+      ui/Minimap.ts
       world/
         tiles.ts
         chunkWorld.ts        # чанки + snapshot (заготовка сейва)
-        generateChunk.ts     # пруды в чанке
-        terrainVisual.ts     # water / straight / corner
+        generate-chunk/      # пруд, хребет, декор
+        terrainVisual.ts     # water / straight / corner / inner
   .env.example
   index.html
   vite.config.ts
@@ -104,5 +104,5 @@ frontend/
 ## Дальше
 
 - сохранение мира
-- Go-бэкенд
+- игровой API бэкенда (сейчас у сервера только healthcheck)
 - UI на React

@@ -14,6 +14,11 @@ const PADDING_PX = 12;
 const TILES_ACROSS = 49;
 const HALF_TILES = Math.floor(TILES_ACROSS / 2);
 
+/** How many chunks around the center the minimap must keep generated. */
+export function minimapChunkRadius(chunkSize: number): number {
+  return Math.ceil(HALF_TILES / chunkSize);
+}
+
 const COLOR = {
   Grass: 0x8dc435,
   Stone: 0x78909c,
@@ -51,6 +56,7 @@ export class Minimap {
   private readonly cellPx: number;
   private lastCenterTileX = Number.NaN;
   private lastCenterTileY = Number.NaN;
+  private lastMarkers: ReadonlyArray<MinimapMarker> = [];
 
   constructor({ scene, depth = 200 }: MinimapOptions) {
     this.scene = scene;
@@ -72,12 +78,20 @@ export class Minimap {
 
     const terrainMoved =
       localTileX !== this.lastCenterTileX || localTileY !== this.lastCenterTileY;
+    if (!terrainMoved && this.sameMarkers(markers)) {
+      return;
+    }
+
     if (terrainMoved) {
       this.lastCenterTileX = localTileX;
       this.lastCenterTileY = localTileY;
-      const radiusChunks = Math.ceil(HALF_TILES / world.chunkSize);
-      world.ensureChunksAround(localTileX, localTileY, radiusChunks);
+      world.ensureChunksAround(
+        localTileX,
+        localTileY,
+        minimapChunkRadius(world.chunkSize),
+      );
     }
+    this.lastMarkers = markers.map((marker) => ({ ...marker }));
 
     this.graphics.clear();
     this.drawPanel();
@@ -89,6 +103,21 @@ export class Minimap {
 
   destroy(): void {
     this.graphics.destroy();
+  }
+
+  private sameMarkers(markers: ReadonlyArray<MinimapMarker>): boolean {
+    if (markers.length !== this.lastMarkers.length) {
+      return false;
+    }
+    return markers.every((marker, index) => {
+      const previous = this.lastMarkers[index];
+      return (
+        previous !== undefined &&
+        marker.tileX === previous.tileX &&
+        marker.tileY === previous.tileY &&
+        marker.color === previous.color
+      );
+    });
   }
 
   private layout(): void {

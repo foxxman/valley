@@ -10,7 +10,7 @@
 Сейчас реализовано:
 
 - бесконечный чанковый мир (генерация по запросу, 16×16);
-- прямоугольные пруды + автотайл берега (straight / corner / water);
+- пруды (4-связный blob) + автотайл берега (straight / corner / inner / water);
 - каменные гряды (ядро 4–10 камней + обводка осколков 1–2);
 - маленькие деревья на траве (~7.5%, непроходимы);
 - цветы и пучки травы (~7.5% каждый, проходимы);
@@ -19,7 +19,7 @@
 - idle bounce (squash/stretch по вертикали);
 - мини-карта 150×150 (правый верх, цвета тайлов, игрок в центре).
 
-Пока **нет**: меню, сохранения на диск, сервера, React UI, боя, NPC, строительства.
+Пока **нет**: меню, сохранения на диск, игрового API (бэкенд отвечает только на healthcheck), React UI, боя, NPC, строительства.
 (Есть `ChunkWorld.toSnapshot` / `fromSnapshot` — заготовка под будущее сохранение, включая деревья и flora.)
 
 Планируемый стек дальше: клиент (этот проект) + позже **Go**-бэкенд; React — только HUD/меню, не игровой цикл.
@@ -51,7 +51,7 @@ index.html
 Логика мира (без Phaser):
   world/tiles.ts          — TileType, walkability
   world/chunkWorld.ts     — бесконечные чанки + snapshot API
-  world/generateChunk.ts  — пруды + деревья/flora внутри одного чанка
+  world/generate-chunk/   — пруды + деревья/flora внутри одного чанка
   world/flora.ts          — виды цветов/травы + маппинг на AssetKey
   world/terrainVisual.ts  — water/straight/corner
 
@@ -67,8 +67,8 @@ UI:
 1. **Логическая карта** ≠ **визуальный тайл**.  
    В чанке `grass | water | stone | stone-shards` + слои `trees` / `flora`. Берег — в `resolveTerrainVisual`.
 
-2. **Данные чанка** живут в `ChunkWorld` на всю сессию.  
-   **Картинки** Phaser можно cull'ить вне viewport — при возврате рисуются снова из тех же tiles/trees/flora.
+2. **Данные чанка** живут рядом с игроком. `releaseFarChunks` забывает сгенерированные чанки; тот же сид собирает их снова. Чанки из `fromSnapshot` закреплены и не выбрасываются.  
+   **Картинка чанка** — один `RenderTexture`. Далеко от камеры он уничтожается и запекается заново из tiles/trees/flora.
 
 3. **Phaser** — цикл, камера, ввод, отрисовка. Генерация — чистые функции.
 
@@ -79,15 +79,15 @@ UI:
 1. Старт: `ChunkWorld(seed)`, генерируется чанк `(0,0)` и соседи, спавн в центре `(0,0)`.
 2. Камера: `startFollow(..., 1, 1)`, **без** `setBounds`.
 3. Игрок идёт → `isWalkableAt` / `getTileAt` создаёт чанк при первом касании.
-4. `update`: `ensureChunksAround` + отрисовка terrain + trees/flora; далеко — destroy images (данные остаются).
+4. `update`: `ensureChunksAround` + запекание чанка в текстуру; далеко — destroy текстуры и `releaseFarChunks`.
 5. Будущий сейв: `world.toSnapshot()` (tiles + trees + flora) → JSON/сервер; загрузка — `ChunkWorld.fromSnapshot`.
 
 ## Алгоритм генерации чанка
 
-Файл: `src/game/world/generateChunk.ts` (вызывается из `ChunkWorld.ensureChunk`).
+Файл: `src/game/world/generate-chunk/` (вызывается из `ChunkWorld.ensureChunk`).
 
 1. Чанк 16×16 (или `VITE_CHUNK_SIZE`), вся трава.
-2. Пруд — с шансом ~40% один прямоугольник ≥3×3, **inset ≥1** от края.
+2. Пруд — с шансом ~40% один 4-связный blob, **inset ≥1** от края; тонкие места срезаются, чтобы у воды был валидный берег.
 3. Каменная гряда — с шансом ~50%: связное ядро 4–10 камней + обводка осколков толщиной 1–2 (Chebyshev); без воды/декора на камне и осколках.
 4. Чанк `(0,0)`: центр 3×3 без воды/камня/декора (спавн).
 5. На чистой траве (кроме спавна): ~7.5% дерево, иначе ~7.5% цветок, иначе ~7.5% пучок травы.
@@ -105,7 +105,7 @@ UI:
 | N / E / S / W | `shore_straight` | прямой берег |
 | N\|W, N\|E, S\|E, S\|W | `shore_corner` | угол: **суша огибает воду** |
 
-Трава всегда `grass.png`. Inner / channel / deadend **не используются**.
+Трава всегда `grass.png`. Канал и тупик отдельных текстур не имеют. Внутренний угол — `shore_corner_inner`, если ортогональной суши нет, но есть диагональная.
 
 Вода граничит с травой только через клетку берега (периметр прямоугольника).
 
@@ -145,7 +145,8 @@ Curated runtime-файлы (`public/assets/`):
 | `stones/stone_shards.png` | осколки на траве (walkable) |
 | `vegetation/tree_small.png` | маленькое дерево (overlay) |
 | `vegetation/flower_*.png` | цветы (walkable overlay) |
-| `vegetation/grass_tuft_*.png` | пучки / кувшинки (walkable overlay) |
+| `vegetation/lily.png` | кувшинки на воде (walkable overlay) |
+| `vegetation/grass_tuft_1.png` | пучок травы (walkable overlay) |
 | `player.png` | игрок |
 
 Ключи Phaser: `src/game/assets.ts` → `AssetKey` + `ASSET_URLS`.
@@ -162,8 +163,7 @@ Curated runtime-файлы (`public/assets/`):
 
 | Переменная | Default | Смысл |
 |------------|---------|--------|
-| `VITE_WORLD_WIDTH` | 48 | ширина в тайлах |
-| `VITE_WORLD_HEIGHT` | 32 | высота в тайлах |
+| `VITE_CHUNK_SIZE` | 16 | сторона чанка в тайлах |
 | `VITE_TILE_SIZE` | 32 | размер клетки на экране (px) |
 | `VITE_WORLD_SEED` | 42 | сид генерации |
 | `VITE_PLAYER_SPEED` | 160 | px/s |
@@ -184,8 +184,7 @@ Curated runtime-файлы (`public/assets/`):
 ## Что ещё не сделано (не выдумывать как существующее)
 
 - сохранение/загрузка мира;
-- Go API;
-- чанки / бесконечный мир;
+- игровые ручки бэкенда (сейчас только healthcheck);
 - здания, ресурсы, NPC;
 - анимация ходьбы спрайтами (сейчас только squash bounce);
 - меню / пауза.
@@ -197,7 +196,7 @@ Curated runtime-файлы (`public/assets/`):
 | Точка входа | `src/main.ts` |
 | Конфиг Phaser | `src/game/config.ts` |
 | Сцена мира | `src/game/scenes/WorldScene.ts` |
-| Генерация чанка | `src/game/world/generateChunk.ts` |
+| Генерация чанка | `src/game/world/generate-chunk/` |
 | Чанковый мир | `src/game/world/chunkWorld.ts` |
 | Автотайлинг берега | `src/game/world/terrainVisual.ts` |
 | Типы тайлов | `src/game/world/tiles.ts` |

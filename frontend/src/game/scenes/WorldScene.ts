@@ -2,23 +2,29 @@ import Phaser from 'phaser';
 import { ASSET_URLS, AssetKey } from '../assets';
 import { gameEnv } from '../env';
 import { Player } from '../entities/Player';
-import { Minimap } from '../ui/Minimap';
+import { Minimap, minimapChunkRadius } from '../ui/Minimap';
 import { ChunkWorld } from '../world/chunkWorld';
 import { FLORA_ASSET } from '../world/flora';
 import { resolveTerrainVisual } from '../world/terrainVisual';
 
-type ChunkImages = Phaser.GameObjects.Image[];
+type ChunkVisuals = Phaser.GameObjects.GameObject[];
 
-/** How many chunks around the player to keep generated/drawn. */
+/** How many chunks around the player to keep generated and drawn. */
 const LOAD_RADIUS_CHUNKS = 1;
-/** Keep drawn images within this Chebyshev radius; data stays in ChunkWorld. */
+/** Keep baked chunk textures within this Chebyshev radius. */
 const DRAW_KEEP_RADIUS_CHUNKS = 2;
+/**
+ * Extra ring past the minimap and the draw window.
+ * Shore autotile reads one tile outside a chunk; without this ring those
+ * neighbors would be generated and dropped on every step.
+ */
+const DATA_KEEP_PADDING_CHUNKS = 1;
 
 export class WorldScene extends Phaser.Scene {
   private player: Player | null = null;
   private world: ChunkWorld | null = null;
   private minimap: Minimap | null = null;
-  private readonly chunkImages = new Map<string, ChunkImages>();
+  private readonly chunkVisuals = new Map<string, ChunkVisuals>();
   private tileSize = 32;
 
   constructor() {
@@ -80,6 +86,11 @@ export class WorldScene extends Phaser.Scene {
     this.ensureAndDrawAround(tileX, tileY, LOAD_RADIUS_CHUNKS);
     this.cullFarChunks(tileX, tileY, DRAW_KEEP_RADIUS_CHUNKS);
     this.minimap?.update(this.world, tileX, tileY);
+    const dataKeep = Math.max(
+      DRAW_KEEP_RADIUS_CHUNKS,
+      minimapChunkRadius(this.world.chunkSize),
+    );
+    this.world.releaseFarChunks(tileX, tileY, dataKeep + DATA_KEEP_PADDING_CHUNKS);
   }
 
   private ensureAndDrawAround(tileX: number, tileY: number, radiusChunks: number): void {
@@ -99,60 +110,53 @@ export class WorldScene extends Phaser.Scene {
     }
 
     const key = `${cx},${cy}`;
-    if (this.chunkImages.has(key)) {
+    if (this.chunkVisuals.has(key)) {
       return;
     }
 
     const { chunk } = this.world.ensureChunk(cx, cy);
-    const images: ChunkImages = [];
     const size = this.world.chunkSize;
     const originTileX = cx * size;
     const originTileY = cy * size;
+    const pixelSize = size * this.tileSize;
+    const chunkTexture = this.add
+      .renderTexture(originTileX * this.tileSize, originTileY * this.tileSize, pixelSize, pixelSize)
+      .setOrigin(0, 0)
+      .setDepth(0);
+    chunkTexture.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+
+    const stamp = this.make.image({ key: AssetKey.Grass, add: false }).setOrigin(0.5, 0.5);
+    const drawStamp = (textureKey: string, lx: number, ly: number, angle: number) => {
+      stamp.setTexture(textureKey);
+      stamp.setDisplaySize(this.tileSize, this.tileSize);
+      stamp.setAngle(angle);
+      chunkTexture.draw(
+        stamp,
+        lx * this.tileSize + this.tileSize / 2,
+        ly * this.tileSize + this.tileSize / 2,
+      );
+    };
 
     for (let ly = 0; ly < size; ly += 1) {
       for (let lx = 0; lx < size; lx += 1) {
         const tx = originTileX + lx;
         const ty = originTileY + ly;
         const visual = resolveTerrainVisual(this.world, tx, ty);
-        const image = this.add
-          .image(
-            tx * this.tileSize + this.tileSize / 2,
-            ty * this.tileSize + this.tileSize / 2,
-            visual.key,
-          )
-          .setDisplaySize(this.tileSize, this.tileSize)
-          .setAngle(visual.angle)
-          .setDepth(0);
-        images.push(image);
+        drawStamp(visual.key, lx, ly, visual.angle);
 
         if (chunk.trees[ly * size + lx]) {
-          const tree = this.add
-            .image(
-              tx * this.tileSize + this.tileSize / 2,
-              ty * this.tileSize + this.tileSize / 2,
-              AssetKey.TreeSmall,
-            )
-            .setDisplaySize(this.tileSize, this.tileSize)
-            .setDepth(2);
-          images.push(tree);
+          drawStamp(AssetKey.TreeSmall, lx, ly, 0);
         } else {
           const floraKind = chunk.flora[ly * size + lx];
           if (floraKind) {
-            const flora = this.add
-              .image(
-                tx * this.tileSize + this.tileSize / 2,
-                ty * this.tileSize + this.tileSize / 2,
-                FLORA_ASSET[floraKind],
-              )
-              .setDisplaySize(this.tileSize, this.tileSize)
-              .setDepth(1);
-            images.push(flora);
+            drawStamp(FLORA_ASSET[floraKind], lx, ly, 0);
           }
         }
       }
     }
 
-    this.chunkImages.set(key, images);
+    stamp.destroy();
+    this.chunkVisuals.set(key, [chunkTexture]);
   }
 
   private cullFarChunks(tileX: number, tileY: number, keepRadiusChunks: number): void {
@@ -162,15 +166,15 @@ export class WorldScene extends Phaser.Scene {
 
     const { cx, cy } = this.world.worldToChunk(tileX, tileY);
 
-    for (const key of [...this.chunkImages.keys()]) {
+    for (const key of [...this.chunkVisuals.keys()]) {
       const [chunkX, chunkY] = key.split(',').map(Number) as [number, number];
       if (
         Math.abs(chunkX - cx) > keepRadiusChunks ||
         Math.abs(chunkY - cy) > keepRadiusChunks
       ) {
-        const images = this.chunkImages.get(key);
-        images?.forEach((image) => image.destroy());
-        this.chunkImages.delete(key);
+        const visuals = this.chunkVisuals.get(key);
+        visuals?.forEach((visual) => visual.destroy());
+        this.chunkVisuals.delete(key);
       }
     }
   }

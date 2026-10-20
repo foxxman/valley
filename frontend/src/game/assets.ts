@@ -32,7 +32,7 @@ export const ASSET_URLS: Record<AssetKey, string> = {
   [AssetKey.Flower1]: '/assets/vegetation/flower_1.png',
   [AssetKey.Flower2]: '/assets/vegetation/flower_2.png',
   [AssetKey.Flower3]: '/assets/vegetation/flower_3.png',
-  [AssetKey.Lily]: '/assets/vegetation/grass_tuft_0.png',
+  [AssetKey.Lily]: '/assets/vegetation/lily.png',
   [AssetKey.GrassTuft1]: '/assets/vegetation/grass_tuft_1.png',
   [AssetKey.Player]: '/assets/player.png',
 };

@@ -40,14 +40,18 @@ function mod(value: number, size: number): number {
 }
 
 /**
- * Infinite chunked world. Chunks generate on first access and stay in memory
- * (session cache). Use `toSnapshot` / `fromSnapshot` when persistence is added.
+ * Infinite chunked world. Chunks generate on first access.
+ * `releaseFarChunks` drops generated chunks outside the player's neighborhood;
+ * the same seed rebuilds them. Chunks loaded via `fromSnapshot` stay pinned,
+ * because a save may differ from regeneration.
  */
 export class ChunkWorld {
   readonly seed: number;
   readonly chunkSize: number;
 
   private readonly chunks = new Map<string, ChunkData>();
+  /** Snapshot chunks. Not released, so a loaded save is not overwritten by generation. */
+  private readonly pinnedChunks = new Set<string>();
 
   constructor(seed: number, chunkSize: number = DEFAULT_CHUNK_SIZE) {
     this.seed = seed;
@@ -57,7 +61,9 @@ export class ChunkWorld {
   static fromSnapshot(snapshot: WorldSnapshot): ChunkWorld {
     const world = new ChunkWorld(snapshot.seed, snapshot.chunkSize);
     for (const chunk of snapshot.chunks) {
-      world.chunks.set(chunkKey(chunk.cx, chunk.cy), {
+      const key = chunkKey(chunk.cx, chunk.cy);
+      world.pinnedChunks.add(key);
+      world.chunks.set(key, {
         cx: chunk.cx,
         cy: chunk.cy,
         tiles: chunk.tiles.slice(),
@@ -160,5 +166,30 @@ export class ChunkWorld {
     }
 
     return result;
+  }
+
+  /**
+   * Forget generated chunks outside the Chebyshev radius around the tile.
+   * Pinned snapshot chunks are kept.
+   */
+  releaseFarChunks(tileX: number, tileY: number, keepRadiusChunks: number): void {
+    const { cx, cy } = this.worldToChunk(tileX, tileY);
+    const stale: string[] = [];
+
+    for (const [key, chunk] of this.chunks) {
+      if (this.pinnedChunks.has(key)) {
+        continue;
+      }
+      if (
+        Math.abs(chunk.cx - cx) > keepRadiusChunks ||
+        Math.abs(chunk.cy - cy) > keepRadiusChunks
+      ) {
+        stale.push(key);
+      }
+    }
+
+    for (const key of stale) {
+      this.chunks.delete(key);
+    }
   }
 }

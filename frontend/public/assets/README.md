@@ -21,7 +21,7 @@ Organized under `public/assets/`:
 | `stones/stone_shards.png` | Stone shards on grass (walkable) | — |
 | `vegetation/tree_small.png` | Small tree overlay (on grass) | — |
 | `vegetation/flower_0.png` … `flower_3.png` | Flower overlays (walkable) | — |
-| `vegetation/grass_tuft_0.png` | Lilies on water (overlay) | — |
+| `vegetation/lily.png` | Lilies on water (overlay) | — |
 | `vegetation/grass_tuft_1.png` | Grass tuft on land (overlay) | — |
 | `player.png` | Player | — |
 
