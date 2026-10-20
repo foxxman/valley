@@ -59,7 +59,7 @@ public/assets/
   kenney_tiny-farm/
 ```
 
-Лицензия паков Kenney: **CC0**. Источники выбранных кадров — в `public/assets/game/README.md`.
+Лицензия паков Kenney: **CC0**. Источники выбранных кадров — в [`public/assets/README.md`](./public/assets/README.md).
 
 ## Переменные окружения
 

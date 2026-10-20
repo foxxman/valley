@@ -16,7 +16,8 @@
 - цветы и пучки травы (~7.5% каждый, проходимы);
 - ходьба персонажа (WASD / стрелки; деревья и камень непроходимы);
 - камера всегда держит персонажа в центре;
-- idle bounce (squash/stretch по вертикали).
+- idle bounce (squash/stretch по вертикали);
+- мини-карта 150×150 (правый верх, цвета тайлов, игрок в центре).
 
 Пока **нет**: меню, сохранения на диск, сервера, React UI, боя, NPC, строительства.
 (Есть `ChunkWorld.toSnapshot` / `fromSnapshot` — заготовка под будущее сохранение, включая деревья и flora.)
@@ -45,7 +46,7 @@ index.html
             └─ WorldScene
                  ├─ preload()     — текстуры
                  ├─ create()      — ChunkWorld + spawn chunk + Player + follow camera
-                 └─ update()      — player; ensure/draw chunks; cull far images
+                 └─ update()      — player; ensure/draw chunks; cull; minimap
 
 Логика мира (без Phaser):
   world/tiles.ts          — TileType, walkability
@@ -53,6 +54,9 @@ index.html
   world/generateChunk.ts  — пруды + деревья/flora внутри одного чанка
   world/flora.ts          — виды цветов/травы + маппинг на AssetKey
   world/terrainVisual.ts  — water/straight/corner
+
+UI:
+  ui/Minimap.ts           — HUD-мини-карта (Graphics, scrollFactor 0)
 
 Сущности:
   entities/Player.ts      — ввод, коллизии (isWalkableAt), bounce
@@ -115,7 +119,7 @@ index.html
 | N / E / S / W | 0 / 90 / 180 / 270 |
 | N\|W / N\|E / S\|E / S\|W | 0 / 90 / 180 / 270 |
 
-**Не ломай** соглашения ориентации без обновления `public/assets/game/README.md`.
+**Не ломай** соглашения ориентации без обновления `public/assets/README.md`.
 
 ## Персонаж
 
@@ -128,19 +132,20 @@ index.html
 
 ## Ассеты
 
-Curated runtime-файлы:
+Curated runtime-файлы (`public/assets/`):
 
 | Файл | Роль |
 |------|------|
-| `grass.png` | interior land |
-| `water.png` | interior water |
-| `shore_straight.png` | прямой берег |
-| `shore_corner.png` | угол (суша огибает воду) |
-| `stone.png` | непроходимый камень |
-| `stone_shards.png` | осколки на траве (walkable) |
-| `tree_small.png` | маленькое дерево (overlay) |
-| `flower_*.png` | цветы (walkable overlay) |
-| `grass_tuft_*.png` | пучки травы (walkable overlay) |
+| `soil/grass.png` | interior land |
+| `water/water.png` | interior water |
+| `water/shore_straight.png` | прямой берег |
+| `water/shore_corner.png` | угол (суша огибает воду) |
+| `water/shore_corner_inner.png` | внутренний угол / кусочек суши на воде |
+| `stones/stone.png` | непроходимый камень |
+| `stones/stone_shards.png` | осколки на траве (walkable) |
+| `vegetation/tree_small.png` | маленькое дерево (overlay) |
+| `vegetation/flower_*.png` | цветы (walkable overlay) |
+| `vegetation/grass_tuft_*.png` | пучки / кувшинки (walkable overlay) |
 | `player.png` | игрок |
 
 Ключи Phaser: `src/game/assets.ts` → `AssetKey` + `ASSET_URLS`.
@@ -169,7 +174,7 @@ Curated runtime-файлы:
 
 1. **Не смешивать** логический тип тайла и текстуру берега — берег только в `terrainVisual`.
 2. Новые типы местности: сначала `TileType` + генерация + walkability, потом визуал/автотайл.
-3. Новые текстуры: файл в `public/assets/game/`, ключ в `assets.ts`, при необходимости кадр в `game/README.md`.
+3. Новые текстуры: файл в `public/assets/{soil|water|stones|vegetation}/`, ключ в `assets.ts`, описание в `public/assets/README.md`.
 4. Не тащить React в игровой цикл Phaser; UI — отдельно, когда понадобится.
 5. Не коммитить секреты; `.env` в gitignore, образец — `.env.example`.
 6. Язык общения с пользователем репозитория — **русский**; код/идентификаторы — английский.
@@ -197,6 +202,7 @@ Curated runtime-файлы:
 | Автотайлинг берега | `src/game/world/terrainVisual.ts` |
 | Типы тайлов | `src/game/world/tiles.ts` |
 | Игрок | `src/game/entities/Player.ts` |
+| Мини-карта | `src/game/ui/Minimap.ts` |
 | Ключи ассетов | `src/game/assets.ts` |
 | Env | `src/game/env.ts` |
 | Человеческий README | `README.md` |

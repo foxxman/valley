@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { gameEnv } from '../env';
 import { AssetKey } from '../assets';
 import type { ChunkWorld } from '../world/chunkWorld';
+import { resolveTerrainVisual } from '../world/terrainVisual';
+import { TileType } from '../world/tiles';
 
 type PlayerOptions = {
   scene: Phaser.Scene;
@@ -14,6 +16,22 @@ type PlayerOptions = {
 const BOUNCE_SPEED = 0.01;
 const SQUASH_MIN = 0.86;
 const SQUASH_MAX = 1;
+/** На воде скорость в 2 раза ниже. */
+const SWIM_SPEED_FACTOR = 0.5;
+/** Доля видимой высоты спрайта при плавании (низ обрезается на 20%). */
+const SWIM_VISIBLE_RATIO = 0.8;
+
+/** Визуалы воды, где фигурка обрезается снизу (не прямой берег). */
+const SWIM_CLIP_VISUALS: ReadonlySet<AssetKey> = new Set([
+  AssetKey.Water,
+  AssetKey.ShoreCorner,
+  AssetKey.ShoreCornerInner,
+]);
+
+type SwimState = {
+  inWater: boolean;
+  clipBottom: boolean;
+};
 
 export class Player {
   readonly sprite: Phaser.GameObjects.Image;
@@ -59,7 +77,8 @@ export class Player {
   }
 
   update(deltaMs: number): void {
-    this.updateBounce(deltaMs);
+    const swim = this.getSwimState();
+    this.updateBounce(deltaMs, swim);
 
     const delta = deltaMs / 1000;
     let vx = 0;
@@ -78,7 +97,7 @@ export class Player {
       vy += 1;
     }
 
-    // Mirror along the vertical axis by facing; keep last facing when idle or only vertical.
+    // Зеркало по вертикали при движении вбок; последнее направление при простое.
     if (vx !== 0) {
       this.sprite.setFlipX(vx < 0);
     }
@@ -87,9 +106,10 @@ export class Player {
       return;
     }
 
+    const moveSpeed = this.speed * (swim.inWater ? SWIM_SPEED_FACTOR : 1);
     const length = Math.hypot(vx, vy);
-    vx = (vx / length) * this.speed * delta;
-    vy = (vy / length) * this.speed * delta;
+    vx = (vx / length) * moveSpeed * delta;
+    vy = (vy / length) * moveSpeed * delta;
 
     const nextX = this.sprite.x + vx;
     const nextY = this.sprite.y + vy;
@@ -103,13 +123,54 @@ export class Player {
     }
   }
 
-  private updateBounce(deltaMs: number): void {
+  /**
+   * На суше — squash/stretch.
+   * В воде — без сжатия; при необходимости только обрезка низа.
+   */
+  private updateBounce(deltaMs: number, swim: SwimState): void {
+    const frame = this.sprite.frame;
+
+    if (swim.inWater) {
+      const fullW = this.baseSize;
+      const fullH = this.baseSize;
+
+      if (swim.clipBottom) {
+        const visibleH = fullH * SWIM_VISIBLE_RATIO;
+        this.sprite.setCrop(0, 0, frame.width, frame.height * SWIM_VISIBLE_RATIO);
+        this.sprite.setDisplaySize(fullW, visibleH);
+        this.sprite.setOrigin(0.5, 0.5 / SWIM_VISIBLE_RATIO);
+      } else {
+        this.sprite.setCrop();
+        this.sprite.setDisplaySize(fullW, fullH);
+        this.sprite.setOrigin(0.5, 0.5);
+      }
+      return;
+    }
+
     this.bouncePhase += deltaMs * BOUNCE_SPEED;
     const wave = 0.5 + 0.5 * Math.sin(this.bouncePhase);
     const scaleY = SQUASH_MIN + (SQUASH_MAX - SQUASH_MIN) * wave;
     const scaleX = 2 - scaleY;
 
+    this.sprite.setCrop();
     this.sprite.setDisplaySize(this.baseSize * scaleX, this.baseSize * scaleY);
+    this.sprite.setOrigin(0.5, 0.5);
+  }
+
+  private getSwimState(): SwimState {
+    const tileX = Math.floor(this.sprite.x / this.tileSize);
+    const tileY = Math.floor(this.sprite.y / this.tileSize);
+    const tile = this.world.getTileAt(tileX, tileY);
+
+    if (tile !== TileType.Water) {
+      return { inWater: false, clipBottom: false };
+    }
+
+    const visual = resolveTerrainVisual(this.world, tileX, tileY);
+    return {
+      inWater: true,
+      clipBottom: SWIM_CLIP_VISUALS.has(visual.key),
+    };
   }
 
   private canOccupy(x: number, y: number): boolean {
@@ -123,7 +184,6 @@ export class Player {
     return points.every((point) => {
       const tileX = Math.floor(point.x / this.tileSize);
       const tileY = Math.floor(point.y / this.tileSize);
-      // isWalkableAt generates the chunk on demand when walking into new areas.
       return this.world.isWalkableAt(tileX, tileY);
     });
   }

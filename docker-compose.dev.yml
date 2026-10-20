@@ -1,0 +1,15 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./backend:/src
+      - backend_go_mod_cache:/go/pkg/mod
+      - backend_go_build_cache:/root/.cache/go-build
+    command: ["air", "-c", ".air.toml"]
+    restart: "no"
+
+volumes:
+  backend_go_mod_cache:
+  backend_go_build_cache:

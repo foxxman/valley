@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { ASSET_URLS, AssetKey } from '../assets';
 import { gameEnv } from '../env';
 import { Player } from '../entities/Player';
+import { Minimap } from '../ui/Minimap';
 import { ChunkWorld } from '../world/chunkWorld';
 import { FLORA_ASSET } from '../world/flora';
 import { resolveTerrainVisual } from '../world/terrainVisual';
@@ -16,6 +17,7 @@ const DRAW_KEEP_RADIUS_CHUNKS = 2;
 export class WorldScene extends Phaser.Scene {
   private player: Player | null = null;
   private world: ChunkWorld | null = null;
+  private minimap: Minimap | null = null;
   private readonly chunkImages = new Map<string, ChunkImages>();
   private tileSize = 32;
 
@@ -63,6 +65,8 @@ export class WorldScene extends Phaser.Scene {
       })
       .setScrollFactor(0)
       .setDepth(100);
+
+    this.minimap = new Minimap({ scene: this });
   }
 
   update(_time: number, delta: number): void {
@@ -75,6 +79,7 @@ export class WorldScene extends Phaser.Scene {
     const tileY = Math.floor(this.player.sprite.y / this.tileSize);
     this.ensureAndDrawAround(tileX, tileY, LOAD_RADIUS_CHUNKS);
     this.cullFarChunks(tileX, tileY, DRAW_KEEP_RADIUS_CHUNKS);
+    this.minimap?.update(this.world, tileX, tileY);
   }
 
   private ensureAndDrawAround(tileX: number, tileY: number, radiusChunks: number): void {

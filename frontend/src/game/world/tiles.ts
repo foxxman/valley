@@ -9,7 +9,7 @@ export type TileType = (typeof TileType)[keyof typeof TileType];
 
 export const TILE_WALKABLE: Record<TileType, boolean> = {
   [TileType.Grass]: true,
-  [TileType.Water]: false,
+  [TileType.Water]: true,
   [TileType.Stone]: false,
   [TileType.StoneShards]: true,
 };
