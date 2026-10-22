@@ -21,6 +21,9 @@ func TestLogRequests(t *testing.T) {
 	mux.HandleFunc("GET /healthcheck", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	mux.HandleFunc("GET /swagger/index.html", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 
 	handler := LogRequests(logger, mux)
 
@@ -28,6 +31,8 @@ func TestLogRequests(t *testing.T) {
 	handler.ServeHTTP(httptest.NewRecorder(), me)
 	health := httptest.NewRequest(http.MethodGet, "/healthcheck", nil)
 	handler.ServeHTTP(httptest.NewRecorder(), health)
+	swagger := httptest.NewRequest(http.MethodGet, "/swagger/index.html", nil)
+	handler.ServeHTTP(httptest.NewRecorder(), swagger)
 
 	logText := buf.String()
 	if !strings.Contains(logText, "method=GET") || !strings.Contains(logText, "path=/api/auth/me") || !strings.Contains(logText, "status=401") {
@@ -38,6 +43,9 @@ func TestLogRequests(t *testing.T) {
 	}
 	if !strings.Contains(logText, "path=/healthcheck") || !strings.Contains(logText, "level=DEBUG") {
 		t.Fatalf("health log %s", logText)
+	}
+	if !strings.Contains(logText, "path=/swagger/index.html") || strings.Count(logText, "level=DEBUG") < 2 {
+		t.Fatalf("swagger log %s", logText)
 	}
 }
 

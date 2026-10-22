@@ -9,14 +9,22 @@ import (
 )
 
 type Response struct {
-	Status   string `json:"status"`
-	Database bool   `json:"database"`
-}
+	Status   string `json:"status" example:"ok"`
+	Database bool   `json:"database" example:"true"`
+} //@name health
 
 type databasePinger interface {
 	Ping(context.Context) error
 }
 
+// NewHandler проверяет процесс и доступность базы.
+//
+//	@Summary	Проверка живости
+//	@Tags		health
+//	@Produce	json
+//	@Success	200	{object}	Response
+//	@Failure	503	{object}	Response	"База недоступна"
+//	@Router		/healthcheck [get]
 func NewHandler(pool databasePinger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)

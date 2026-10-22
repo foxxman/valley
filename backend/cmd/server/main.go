@@ -69,6 +69,7 @@ func run() error {
 		Secure:     cfg.CookieSecure,
 	})
 	httpapi.RegisterGames(mux, game.NewService(game.NewRepository(pool)), authService)
+	httpapi.RegisterSwagger(mux)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

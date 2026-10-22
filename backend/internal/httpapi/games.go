@@ -24,20 +24,20 @@ type PlayerSession interface {
 }
 
 type gameBody struct {
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
+	ID        string     `json:"id" example:"3f1c2a0e-7b4d-4e1a-9c2f-6d8e0a1b2c3d"`
+	Name      string     `json:"name" example:"Северная долина"`
 	Owner     playerBody `json:"owner"`
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
-}
+	CreatedAt time.Time  `json:"createdAt" example:"2026-01-02T15:04:05Z"`
+	UpdatedAt time.Time  `json:"updatedAt" example:"2026-01-02T15:04:05Z"`
+} //@name game
 
 type gameListBody struct {
 	Games []gameBody `json:"games"`
-}
+} //@name gameList
 
 type nameBody struct {
-	Name string `json:"name"`
-}
+	Name string `json:"name" example:"Северная долина"`
+} //@name gameName
 
 func RegisterGames(mux *http.ServeMux, games GameService, sessions PlayerSession) {
 	h := &gameHandler{games: games, sessions: sessions}
@@ -52,6 +52,19 @@ type gameHandler struct {
 	sessions PlayerSession
 }
 
+// create создаёт игру текущего игрока.
+//
+//	@Summary	Создать игру
+//	@Tags		games
+//	@Accept		json
+//	@Produce	json
+//	@Security	AccessCookie
+//	@Param		body	body		nameBody	true	"Название"
+//	@Success	201		{object}	gameBody
+//	@Failure	400		{object}	errorBody	"invalid_body или invalid_name"
+//	@Failure	401		{object}	errorBody	"unauthorized"
+//	@Failure	500		{object}	errorBody
+//	@Router		/api/games [post]
 func (h *gameHandler) create(w http.ResponseWriter, r *http.Request) {
 	current, ok := h.currentPlayer(w, r)
 	if !ok {
@@ -70,6 +83,16 @@ func (h *gameHandler) create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toGameBody(created))
 }
 
+// list возвращает игры текущего игрока.
+//
+//	@Summary	Список своих игр
+//	@Tags		games
+//	@Produce	json
+//	@Security	AccessCookie
+//	@Success	200	{object}	gameListBody
+//	@Failure	401	{object}	errorBody	"unauthorized"
+//	@Failure	500	{object}	errorBody
+//	@Router		/api/games [get]
 func (h *gameHandler) list(w http.ResponseWriter, r *http.Request) {
 	current, ok := h.currentPlayer(w, r)
 	if !ok {
@@ -87,6 +110,18 @@ func (h *gameHandler) list(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, body)
 }
 
+// find возвращает игру по id.
+//
+//	@Summary	Игра по id
+//	@Tags		games
+//	@Produce	json
+//	@Security	AccessCookie
+//	@Param		id	path		string	true	"ID игры"
+//	@Success	200	{object}	gameBody
+//	@Failure	401	{object}	errorBody	"unauthorized"
+//	@Failure	404	{object}	errorBody	"game_not_found"
+//	@Failure	500	{object}	errorBody
+//	@Router		/api/games/{id} [get]
 func (h *gameHandler) find(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.currentPlayer(w, r); !ok {
 		return
@@ -99,6 +134,22 @@ func (h *gameHandler) find(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toGameBody(found))
 }
 
+// rename меняет название игры владельца.
+//
+//	@Summary	Переименовать игру
+//	@Tags		games
+//	@Accept		json
+//	@Produce	json
+//	@Security	AccessCookie
+//	@Param		id		path		string		true	"ID игры"
+//	@Param		body	body		nameBody	true	"Новое название"
+//	@Success	200		{object}	gameBody
+//	@Failure	400		{object}	errorBody	"invalid_body или invalid_name"
+//	@Failure	401		{object}	errorBody	"unauthorized"
+//	@Failure	403		{object}	errorBody	"forbidden"
+//	@Failure	404		{object}	errorBody	"game_not_found"
+//	@Failure	500		{object}	errorBody
+//	@Router		/api/games/{id} [patch]
 func (h *gameHandler) rename(w http.ResponseWriter, r *http.Request) {
 	current, ok := h.currentPlayer(w, r)
 	if !ok {

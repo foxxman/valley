@@ -41,10 +41,10 @@ var errorMessage = map[string]string{
 
 type errorBody struct {
 	Error struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
+		Code    string `json:"code" example:"invalid_login"`
+		Message string `json:"message" example:"Логин: 3–24 символа, латиница, цифры и подчёркивание"`
 	} `json:"error"`
-}
+} //@name errorResponse
 
 func writeError(w http.ResponseWriter, status int, code string) {
 	message, ok := errorMessage[code]

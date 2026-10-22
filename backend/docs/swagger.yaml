@@ -1,0 +1,371 @@
+basePath: /
+definitions:
+  credentials:
+    properties:
+      login:
+        example: player_one
+        type: string
+      password:
+        example: password1
+        type: string
+    type: object
+  errorResponse:
+    properties:
+      error:
+        properties:
+          code:
+            example: invalid_login
+            type: string
+          message:
+            example: 'Логин: 3–24 символа, латиница, цифры и подчёркивание'
+            type: string
+        type: object
+    type: object
+  game:
+    properties:
+      createdAt:
+        example: "2026-01-02T15:04:05Z"
+        type: string
+      id:
+        example: 3f1c2a0e-7b4d-4e1a-9c2f-6d8e0a1b2c3d
+        type: string
+      name:
+        example: Северная долина
+        type: string
+      owner:
+        $ref: '#/definitions/player'
+      updatedAt:
+        example: "2026-01-02T15:04:05Z"
+        type: string
+    type: object
+  gameList:
+    properties:
+      games:
+        items:
+          $ref: '#/definitions/game'
+        type: array
+    type: object
+  gameName:
+    properties:
+      name:
+        example: Северная долина
+        type: string
+    type: object
+  health:
+    properties:
+      database:
+        example: true
+        type: boolean
+      status:
+        example: ok
+        type: string
+    type: object
+  player:
+    properties:
+      id:
+        example: 3f1c2a0e-7b4d-4e1a-9c2f-6d8e0a1b2c3d
+        type: string
+      login:
+        example: player_one
+        type: string
+    type: object
+info:
+  contact: {}
+  description: HTTP API игры. Спека собрана из комментариев над хендлерами, на сами
+    запросы страница не смотрит.
+  title: Game API
+  version: "1.0"
+paths:
+  /api/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Проверяет логин и пароль. Дальше браузер сам отправляет cookie
+        на запросы с этой страницы.
+      parameters:
+      - description: Логин и пароль
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/credentials'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/player'
+        "400":
+          description: invalid_body
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "401":
+          description: invalid_credentials
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      summary: Вход
+      tags:
+      - auth
+  /api/auth/logout:
+    post:
+      description: Без refresh_token тоже отвечает 204 и стирает cookie.
+      responses:
+        "204":
+          description: No Content
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - RefreshCookie: []
+      summary: Выход
+      tags:
+      - auth
+  /api/auth/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/player'
+        "401":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - AccessCookie: []
+      summary: Текущий игрок
+      tags:
+      - auth
+  /api/auth/refresh:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/player'
+        "401":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - RefreshCookie: []
+      summary: Обновить сессию
+      tags:
+      - auth
+  /api/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: 'Создаёт игрока. Токены приходят только в Set-Cookie: access_token
+        и refresh_token.'
+      parameters:
+      - description: Логин и пароль
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/credentials'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/player'
+        "400":
+          description: invalid_body, invalid_login или invalid_password
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "409":
+          description: login_taken
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      summary: Регистрация
+      tags:
+      - auth
+  /api/games:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/gameList'
+        "401":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - AccessCookie: []
+      summary: Список своих игр
+      tags:
+      - games
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Название
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/gameName'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/game'
+        "400":
+          description: invalid_body или invalid_name
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "401":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - AccessCookie: []
+      summary: Создать игру
+      tags:
+      - games
+  /api/games/{id}:
+    get:
+      parameters:
+      - description: ID игры
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/game'
+        "401":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "404":
+          description: game_not_found
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - AccessCookie: []
+      summary: Игра по id
+      tags:
+      - games
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID игры
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Новое название
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/gameName'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/game'
+        "400":
+          description: invalid_body или invalid_name
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "401":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "403":
+          description: forbidden
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "404":
+          description: game_not_found
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - AccessCookie: []
+      summary: Переименовать игру
+      tags:
+      - games
+  /healthcheck:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/health'
+        "503":
+          description: База недоступна
+          schema:
+            $ref: '#/definitions/health'
+      summary: Проверка живости
+      tags:
+      - health
+securityDefinitions:
+  AccessCookie:
+    description: HttpOnly cookie сессии. Её выставляют register и login, браузер шлёт
+      её сам.
+    in: cookie
+    name: access_token
+    type: apiKey
+  RefreshCookie:
+    description: HttpOnly cookie обновления, path /api/auth. Нужна для refresh и logout.
+    in: cookie
+    name: refresh_token
+    type: apiKey
+swagger: "2.0"

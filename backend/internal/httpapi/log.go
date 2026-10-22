@@ -3,6 +3,7 @@ package httpapi
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -53,7 +54,7 @@ func requestLogLevel(path string, status int) slog.Level {
 	if status >= http.StatusBadRequest {
 		return slog.LevelWarn
 	}
-	if path == "/healthcheck" {
+	if path == "/healthcheck" || strings.HasPrefix(path, "/swagger") {
 		return slog.LevelDebug
 	}
 	return slog.LevelInfo
