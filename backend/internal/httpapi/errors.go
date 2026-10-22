@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"game/backend/internal/auth"
+	"game/backend/internal/game"
 )
 
 type apiFailure struct {
@@ -20,6 +21,9 @@ var serviceFailures = map[error]apiFailure{
 	auth.ErrLoginTaken:         {status: http.StatusConflict, code: "login_taken"},
 	auth.ErrInvalidCredentials: {status: http.StatusUnauthorized, code: "invalid_credentials"},
 	auth.ErrUnauthorized:       {status: http.StatusUnauthorized, code: "unauthorized"},
+	game.ErrInvalidName:        {status: http.StatusBadRequest, code: "invalid_name"},
+	game.ErrNotFound:           {status: http.StatusNotFound, code: "game_not_found"},
+	game.ErrForbidden:          {status: http.StatusForbidden, code: "forbidden"},
 }
 
 var errorMessage = map[string]string{
@@ -29,6 +33,9 @@ var errorMessage = map[string]string{
 	"login_taken":         "Этот логин уже занят",
 	"invalid_credentials": "Неверный логин или пароль",
 	"unauthorized":        "Нужно войти снова",
+	"invalid_name":        "Название: от 1 до 40 символов",
+	"game_not_found":      "Игра не найдена",
+	"forbidden":           "Менять название может только владелец",
 	"internal":            "Внутренняя ошибка",
 }
 

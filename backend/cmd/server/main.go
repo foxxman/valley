@@ -14,6 +14,7 @@ import (
 	"game/backend/internal/auth"
 	"game/backend/internal/config"
 	"game/backend/internal/db"
+	"game/backend/internal/game"
 	"game/backend/internal/health"
 	"game/backend/internal/httpapi"
 	"game/backend/internal/logger"
@@ -67,6 +68,7 @@ func run() error {
 		RefreshTTL: cfg.RefreshTTL,
 		Secure:     cfg.CookieSecure,
 	})
+	httpapi.RegisterGames(mux, game.NewService(game.NewRepository(pool)), authService)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

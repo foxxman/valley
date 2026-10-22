@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthPage } from '../auth/AuthPage';
 import { useSession } from '../auth/session';
 import { GamePage } from '../game/GamePage';
+import { GameSelectionProvider } from '../games/selection';
 import { LobbyPage } from '../lobby/LobbyPage';
 
 export function App() {
@@ -31,11 +32,14 @@ export function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/login" element={player ? <Navigate to="/lobby" replace /> : <AuthPage />} />
-      <Route path="/lobby" element={player ? <LobbyPage /> : <Navigate to="/login" replace />} />
-      <Route path="/play" element={player ? <GamePage /> : <Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to={player ? '/lobby' : '/login'} replace />} />
-    </Routes>
+    <GameSelectionProvider playerId={player?.id ?? null}>
+      <Routes>
+        <Route path="/login" element={player ? <Navigate to="/lobby" replace /> : <AuthPage />} />
+        <Route path="/lobby" element={player ? <LobbyPage /> : <Navigate to="/login" replace />} />
+        <Route path="/play" element={<Navigate to="/lobby" replace />} />
+        <Route path="/play/:gameId" element={player ? <GamePage /> : <Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to={player ? '/lobby' : '/login'} replace />} />
+      </Routes>
+    </GameSelectionProvider>
   );
 }

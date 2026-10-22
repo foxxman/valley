@@ -51,8 +51,12 @@ input {
 
 .mode-switch button,
 .actions button,
+.menu button,
+.dialog-form button,
 .panel > button,
-.game-exit {
+.game-exit,
+.settings-anchor > button,
+.game-list button {
   border: 1px solid #243044;
   background: #1a2332;
   color: inherit;
@@ -102,9 +106,98 @@ input {
   display: block;
 }
 
-.game-exit {
-  position: absolute;
-  z-index: 2;
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.menu button {
+  width: 100%;
+  text-align: left;
+}
+
+.menu button.secondary {
+  background: transparent;
+}
+
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(5, 8, 16, 0.72);
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.game-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.game-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.game-list li > div {
+  min-width: 0;
+}
+
+.game-list button {
+  flex-shrink: 0;
+}
+
+.panel .game-id,
+.game-id {
+  display: block;
+  margin-top: 4px;
+  color: #9aa8bd;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.corner-stack {
+  position: fixed;
+  z-index: 3;
   left: 12px;
   bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.settings-anchor {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.panel.corner-panel {
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(420px, calc(100vh - 80px));
+  overflow: auto;
 }
