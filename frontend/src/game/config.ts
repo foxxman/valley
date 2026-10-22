@@ -9,8 +9,8 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
     pixelArt: true,
     scale: {
       mode: Phaser.Scale.RESIZE,
-      width: window.innerWidth,
-      height: window.innerHeight,
+      width: parent.clientWidth || window.innerWidth,
+      height: parent.clientHeight || window.innerHeight,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
     scene: [WorldScene],

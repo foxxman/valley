@@ -19,7 +19,8 @@
 - idle bounce (squash/stretch по вертикали);
 - мини-карта 150×150 (правый верх, цвета тайлов, игрок в центре).
 
-Пока **нет**: меню, сохранения на диск, игрового API (бэкенд отвечает только на healthcheck), React UI, боя, NPC, строительства.
+Пока **нет**: сохранения на диск, комнат, чатов, друзей, боя, NPC, строительства.
+Вход и лобби — React (`src/main.tsx`). Карта — Phaser внутри маршрута `/play`. Бэкенд: регистрация и сессия в куках.
 (Есть `ChunkWorld.toSnapshot` / `fromSnapshot` — заготовка под будущее сохранение, включая деревья и flora.)
 
 Планируемый стек дальше: клиент (этот проект) + позже **Go**-бэкенд; React — только HUD/меню, не игровой цикл.
@@ -41,8 +42,9 @@
 
 ```text
 index.html
-  └─ src/main.ts
-       └─ Phaser.Game(createGameConfig)
+  └─ src/main.tsx
+       └─ React: /login | /lobby | /play
+            └─ /play → Phaser.Game(createGameConfig)
             └─ WorldScene
                  ├─ preload()     — текстуры
                  ├─ create()      — ChunkWorld + spawn chunk + Player + follow camera
@@ -193,7 +195,7 @@ Curated runtime-файлы (`public/assets/`):
 
 | Задача | Файл |
 |--------|------|
-| Точка входа | `src/main.ts` |
+| Точка входа | `src/main.tsx` |
 | Конфиг Phaser | `src/game/config.ts` |
 | Сцена мира | `src/game/scenes/WorldScene.ts` |
 | Генерация чанка | `src/game/world/generate-chunk/` |

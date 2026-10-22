@@ -83,7 +83,10 @@ public/assets/
 frontend/
   public/assets/            # curated-текстуры 16×16
   src/
-    main.ts
+    main.tsx                 # React-оболочка
+    app/                     # маршруты
+    auth/                    # форма входа и сессия
+    lobby/
     game/
       assets.ts             # Ключи и URL текстур
       config.ts
@@ -104,5 +107,5 @@ frontend/
 ## Дальше
 
 - сохранение мира
-- игровой API бэкенда (сейчас у сервера только healthcheck)
-- UI на React
+- комнаты, приватность, чаты, друзья
+

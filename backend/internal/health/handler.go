@@ -3,6 +3,7 @@ package health
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -21,10 +22,10 @@ func NewHandler(pool databasePinger) http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 
-		databaseUp := pool.Ping(ctx) == nil
 		statusCode := http.StatusOK
 		resp := Response{Status: "ok", Database: true}
-		if !databaseUp {
+		if err := pool.Ping(ctx); err != nil {
+			slog.Default().Error("database ping failed", "err", err)
 			statusCode = http.StatusServiceUnavailable
 			resp = Response{Status: "unavailable", Database: false}
 		}
