@@ -14,13 +14,18 @@ type ErrorPayload = {
 const knownCodes: Record<string, GameErrorCode> = {
   invalid_body: 'invalid_body',
   invalid_name: 'invalid_name',
+  invalid_seed: 'invalid_seed',
   game_not_found: 'game_not_found',
   forbidden: 'forbidden',
   unauthorized: 'unauthorized',
 };
 
-export function createGame(name: string): Promise<GameResult<Game>> {
-  return send<Game>(path.collection, 'POST', { name });
+export function createGame(name: string, worldSeed: number | null = null): Promise<GameResult<Game>> {
+  const body: { name: string; worldSeed?: number } = { name };
+  if (worldSeed !== null) {
+    body.worldSeed = worldSeed;
+  }
+  return send<Game>(path.collection, 'POST', body);
 }
 
 export function listMyGames(): Promise<GameResult<Game[]>> {

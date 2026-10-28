@@ -1,0 +1,6 @@
+ALTER TABLE games
+    ADD COLUMN world_seed BIGINT NOT NULL DEFAULT 42,
+    ADD CONSTRAINT games_world_seed_range CHECK (world_seed BETWEEN 0 AND 4294967295);
+
+ALTER TABLE games
+    ALTER COLUMN world_seed DROP DEFAULT;

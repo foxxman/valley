@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { createGame, findGame, listMyGames } from '../games/api';
+import { parseWorldSeed, worldSeedHint } from '../games/seed';
 import type { Game } from '../games/types';
 import { maxGameNameLength } from '../games/types';
+import { gameErrorMessage } from '../games/messages';
 
 type Closeable = {
   onClose: () => void;
@@ -9,14 +11,20 @@ type Closeable = {
 
 export function CreateGameDialog({ onClose, onCreated }: Closeable & { onCreated: (game: Game) => void }) {
   const [name, setName] = useState('');
+  const [seed, setSeed] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    const parsed = parseWorldSeed(seed);
+    if (!parsed.ok) {
+      setError(gameErrorMessage.invalid_seed);
+      return;
+    }
     setPending(true);
     setError('');
-    const result = await createGame(name);
+    const result = await createGame(name, parsed.seed);
     setPending(false);
     if (!result.ok) {
       setError(result.message);
@@ -37,6 +45,16 @@ export function CreateGameDialog({ onClose, onCreated }: Closeable & { onCreated
             autoFocus
           />
         </label>
+        <label>
+          Сид
+          <input
+            value={seed}
+            inputMode="numeric"
+            maxLength={10}
+            onChange={(event) => setSeed(event.target.value)}
+          />
+          <span className="field-hint">{worldSeedHint}</span>
+        </label>
         {error ? <Alert text={error} /> : null}
         <DialogActions pending={pending} submitLabel="Создать" onClose={onClose} />
       </form>
@@ -44,7 +62,7 @@ export function CreateGameDialog({ onClose, onCreated }: Closeable & { onCreated
   );
 }
 
-export function FindGameDialog({ onClose }: Closeable) {
+export function FindGameDialog({ onClose, onJoin }: Closeable & { onJoin: (game: Game) => void }) {
   const [id, setId] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
@@ -77,7 +95,9 @@ export function FindGameDialog({ onClose }: Closeable) {
             <p>Игра найдена!</p>
             <p>{found.name}</p>
             <p className="game-id">{found.id}</p>
-            <button type="button">Присоединиться</button>
+            <button type="button" onClick={() => onJoin(found)}>
+              Присоединиться
+            </button>
           </div>
         ) : null}
         <DialogActions pending={pending} submitLabel="Поиск" onClose={onClose} />

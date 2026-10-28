@@ -75,6 +75,10 @@ export function GameSettings({ game, onRenamed }: GameSettingsProps) {
             ID
             <input value={game.id} readOnly />
           </label>
+          <label>
+            Сид
+            <input value={String(game.worldSeed)} readOnly />
+          </label>
           <p>Владелец: {game.owner.login}</p>
           {error ? (
             <p className="form-error" role="alert">

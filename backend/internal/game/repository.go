@@ -11,7 +11,7 @@ import (
 )
 
 const gameColumns = `
-	g.id::text, g.name, g.owner_id::text, p.login, g.created_at, g.updated_at
+	g.id::text, g.name, g.owner_id::text, p.login, g.world_seed, g.created_at, g.updated_at
 `
 
 type Repository struct {
@@ -22,17 +22,17 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
-func (r *Repository) Create(ctx context.Context, ownerID, name string) (Game, error) {
+func (r *Repository) Create(ctx context.Context, ownerID, name string, worldSeed int64) (Game, error) {
 	row := r.pool.QueryRow(ctx, `
 		WITH created AS (
-			INSERT INTO games (name, owner_id)
-			VALUES ($1, $2::uuid)
-			RETURNING id, name, owner_id, created_at, updated_at
+			INSERT INTO games (name, owner_id, world_seed)
+			VALUES ($1, $2::uuid, $3)
+			RETURNING id, name, owner_id, world_seed, created_at, updated_at
 		)
 		SELECT `+gameColumns+`
 		FROM created g
 		JOIN players p ON p.id = g.owner_id
-	`, name, ownerID)
+	`, name, ownerID, worldSeed)
 	created, err := scanGame(row)
 	if err != nil {
 		return Game{}, fmt.Errorf("create game: %w", mapGameError(err))
@@ -96,7 +96,7 @@ func (r *Repository) UpdateName(ctx context.Context, id, name string) (Game, err
 			UPDATE games
 			SET name = $2, updated_at = now()
 			WHERE id = $1::uuid
-			RETURNING id, name, owner_id, created_at, updated_at
+			RETURNING id, name, owner_id, world_seed, created_at, updated_at
 		)
 		SELECT `+gameColumns+`
 		FROM updated g
@@ -111,7 +111,15 @@ func (r *Repository) UpdateName(ctx context.Context, id, name string) (Game, err
 
 func scanGame(row pgx.Row) (Game, error) {
 	var found Game
-	err := row.Scan(&found.ID, &found.Name, &found.OwnerID, &found.OwnerLogin, &found.CreatedAt, &found.UpdatedAt)
+	err := row.Scan(
+		&found.ID,
+		&found.Name,
+		&found.OwnerID,
+		&found.OwnerLogin,
+		&found.WorldSeed,
+		&found.CreatedAt,
+		&found.UpdatedAt,
+	)
 	return found, err
 }
 
@@ -123,12 +131,14 @@ func mapGameError(err error) error {
 	if !errors.As(err, &pgErr) {
 		return err
 	}
-	byCode := map[string]error{
-		"23514": ErrInvalidName,
-		"22P02": ErrNotFound,
+	if pgErr.Code == "23514" {
+		if pgErr.ConstraintName == "games_world_seed_range" {
+			return ErrInvalidSeed
+		}
+		return ErrInvalidName
 	}
-	if mapped, ok := byCode[pgErr.Code]; ok {
-		return mapped
+	if pgErr.Code == "22P02" {
+		return ErrNotFound
 	}
 	return err
 }

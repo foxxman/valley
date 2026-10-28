@@ -17,8 +17,11 @@ import (
 	"game/backend/internal/game"
 	"game/backend/internal/health"
 	"game/backend/internal/httpapi"
+	"game/backend/internal/inventory"
 	"game/backend/internal/logger"
 	"game/backend/internal/player"
+	"game/backend/internal/presence"
+	"game/backend/internal/realtime"
 )
 
 func main() {
@@ -61,6 +64,13 @@ func run() error {
 		return fmt.Errorf("auth: %w", err)
 	}
 
+	games := game.NewService(game.NewRepository(pool))
+	bags := inventory.NewService(inventory.NewRepository(pool), games)
+	hub := realtime.NewHub()
+	router := realtime.NewRouter()
+	world := presence.New(hub, games)
+	world.Register(router)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthcheck", health.NewHandler(pool))
 	httpapi.Register(mux, authService, httpapi.CookieConfig{
@@ -68,7 +78,9 @@ func run() error {
 		RefreshTTL: cfg.RefreshTTL,
 		Secure:     cfg.CookieSecure,
 	})
-	httpapi.RegisterGames(mux, game.NewService(game.NewRepository(pool)), authService)
+	httpapi.RegisterGames(mux, games, authService)
+	httpapi.RegisterInventory(mux, bags, authService)
+	httpapi.RegisterRealtime(mux, authService, hub, router, world.Disconnect)
 	httpapi.RegisterSwagger(mux)
 
 	server := &http.Server{

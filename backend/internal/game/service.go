@@ -3,26 +3,41 @@ package game
 import "context"
 
 type Store interface {
-	Create(ctx context.Context, ownerID, name string) (Game, error)
+	Create(ctx context.Context, ownerID, name string, worldSeed int64) (Game, error)
 	FindByID(ctx context.Context, id string) (Game, error)
 	ListByOwner(ctx context.Context, ownerID string) ([]Game, error)
 	UpdateName(ctx context.Context, id, name string) (Game, error)
 }
 
 type Service struct {
-	store Store
+	store   Store
+	newSeed func() (int64, error)
 }
 
 func NewService(store Store) *Service {
-	return &Service{store: store}
+	return &Service{store: store, newSeed: RandomWorldSeed}
 }
 
-func (s *Service) Create(ctx context.Context, ownerID, name string) (Game, error) {
+func (s *Service) Create(ctx context.Context, ownerID, name string, worldSeed *int64) (Game, error) {
 	normalized, err := NormalizeName(name)
 	if err != nil {
 		return Game{}, err
 	}
-	return s.store.Create(ctx, ownerID, normalized)
+	seed, err := s.resolveSeed(worldSeed)
+	if err != nil {
+		return Game{}, err
+	}
+	return s.store.Create(ctx, ownerID, normalized, seed)
+}
+
+func (s *Service) resolveSeed(worldSeed *int64) (int64, error) {
+	if worldSeed == nil {
+		return s.newSeed()
+	}
+	if !ValidWorldSeed(*worldSeed) {
+		return 0, ErrInvalidSeed
+	}
+	return *worldSeed, nil
 }
 
 func (s *Service) Find(ctx context.Context, id string) (Game, error) {

@@ -26,7 +26,7 @@ func TestSwaggerUI(t *testing.T) {
 		t.Fatalf("spec status %d", spec.Code)
 	}
 	body := spec.Body.String()
-	for _, part := range []string{"/api/auth/login", "/api/games/{id}", "AccessCookie", "\"player\""} {
+	for _, part := range []string{"/api/auth/login", "/api/games/{id}", "/api/ws", "worldSeed", "AccessCookie", "\"player\""} {
 		if !strings.Contains(body, part) {
 			t.Fatalf("spec missing %s", part)
 		}

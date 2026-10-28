@@ -1,5 +1,16 @@
 basePath: /
 definitions:
+  createGame:
+    properties:
+      name:
+        example: Северная долина
+        type: string
+      worldSeed:
+        description: Необязательный сид мира. Пустое значение — сервер выбирает его
+          сам.
+        example: 42
+        type: integer
+    type: object
   credentials:
     properties:
       login:
@@ -37,6 +48,9 @@ definitions:
       updatedAt:
         example: "2026-01-02T15:04:05Z"
         type: string
+      worldSeed:
+        example: 42
+        type: integer
     type: object
   gameList:
     properties:
@@ -58,6 +72,48 @@ definitions:
         type: boolean
       status:
         example: ok
+        type: string
+    type: object
+  inventory:
+    properties:
+      capacity:
+        example: 20
+        type: integer
+      slots:
+        items:
+          $ref: '#/definitions/inventorySlot'
+        type: array
+    type: object
+  inventorySlot:
+    properties:
+      index:
+        example: 0
+        type: integer
+      item:
+        $ref: '#/definitions/item'
+      quantity:
+        example: 1
+        type: integer
+    type: object
+  item:
+    properties:
+      description:
+        example: Сухие ветки
+        type: string
+      iconKey:
+        example: item-wood
+        type: string
+      id:
+        example: 44444444-4444-4444-4444-444444444444
+        type: string
+      maxStack:
+        example: 20
+        type: integer
+      name:
+        example: Дерево
+        type: string
+      slug:
+        example: wood
         type: string
     type: object
   player:
@@ -231,12 +287,12 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: Название
+      - description: Название и необязательный сид
         in: body
         name: body
         required: true
         schema:
-          $ref: '#/definitions/gameName'
+          $ref: '#/definitions/createGame'
       produces:
       - application/json
       responses:
@@ -245,7 +301,7 @@ paths:
           schema:
             $ref: '#/definitions/game'
         "400":
-          description: invalid_body или invalid_name
+          description: invalid_body, invalid_name или invalid_seed
           schema:
             $ref: '#/definitions/errorResponse'
         "401":
@@ -340,6 +396,56 @@ paths:
       summary: Переименовать игру
       tags:
       - games
+  /api/games/{id}/inventory:
+    get:
+      parameters:
+      - description: ID игры
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/inventory'
+        "401":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "404":
+          description: game_not_found
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - AccessCookie: []
+      summary: Инвентарь игрока
+      tags:
+      - inventory
+  /api/ws:
+    get:
+      description: Переключение протокола на WebSocket. Каталог событий в эту спецификацию
+        не входит. Игра и сид запрашиваются обычными HTTP-ручками.
+      responses:
+        "101":
+          description: WebSocket
+          schema:
+            type: string
+        "401":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - AccessCookie: []
+      summary: Канал сообщений
+      tags:
+      - realtime
   /healthcheck:
     get:
       produces:

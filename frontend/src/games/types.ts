@@ -9,6 +9,7 @@ export type Game = {
   id: string;
   name: string;
   owner: GameOwner;
+  worldSeed: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -16,6 +17,7 @@ export type Game = {
 export type GameErrorCode =
   | 'invalid_body'
   | 'invalid_name'
+  | 'invalid_seed'
   | 'game_not_found'
   | 'forbidden'
   | 'unauthorized'

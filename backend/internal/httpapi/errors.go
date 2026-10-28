@@ -22,6 +22,7 @@ var serviceFailures = map[error]apiFailure{
 	auth.ErrInvalidCredentials: {status: http.StatusUnauthorized, code: "invalid_credentials"},
 	auth.ErrUnauthorized:       {status: http.StatusUnauthorized, code: "unauthorized"},
 	game.ErrInvalidName:        {status: http.StatusBadRequest, code: "invalid_name"},
+	game.ErrInvalidSeed:        {status: http.StatusBadRequest, code: "invalid_seed"},
 	game.ErrNotFound:           {status: http.StatusNotFound, code: "game_not_found"},
 	game.ErrForbidden:          {status: http.StatusForbidden, code: "forbidden"},
 }
@@ -34,6 +35,7 @@ var errorMessage = map[string]string{
 	"invalid_credentials": "Неверный логин или пароль",
 	"unauthorized":        "Нужно войти снова",
 	"invalid_name":        "Название: от 1 до 40 символов",
+	"invalid_seed":        "Сид: целое число от 0 до 4 294 967 295",
 	"game_not_found":      "Игра не найдена",
 	"forbidden":           "Менять название может только владелец",
 	"internal":            "Внутренняя ошибка",

@@ -1,7 +1,21 @@
 import Phaser from 'phaser';
 import { WorldScene } from './scenes/WorldScene';
 
-export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
+export type PlaySession = {
+  gameId: string;
+  worldSeed: number;
+  playerId: string;
+  login: string;
+  onToggleInventory: () => void;
+  onCloseInventory: () => void;
+};
+
+export const playSessionKey = 'playSession';
+
+export function createGameConfig(
+  parent: HTMLElement,
+  session: PlaySession,
+): Phaser.Types.Core.GameConfig {
   return {
     type: Phaser.AUTO,
     parent,
@@ -15,5 +29,10 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
     },
     scene: [WorldScene],
     banner: false,
+    callbacks: {
+      preBoot(game) {
+        game.registry.set(playSessionKey, session);
+      },
+    },
   };
 }

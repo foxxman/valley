@@ -3,6 +3,7 @@ module game/backend
 go 1.23
 
 require (
+	github.com/coder/websocket v1.8.13
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/swaggo/http-swagger/v2 v2.0.2

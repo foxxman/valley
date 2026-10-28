@@ -1,3 +1,4 @@
+import type Phaser from 'phaser';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSession } from '../auth/session';
@@ -5,6 +6,9 @@ import { findGame } from '../games/api';
 import { GameSettings } from '../games/GameSettings';
 import { useGameSelection } from '../games/selection';
 import type { Game } from '../games/types';
+import { loadInventory } from './inventory/api';
+import { InventoryModal, type InventoryView } from './inventory/InventoryModal';
+import { inventoryOpenKey } from './inventory/open';
 import { mountGame } from './mountGame';
 
 export function GamePage() {
@@ -13,9 +17,30 @@ export function GamePage() {
   const { player } = useSession();
   const { select } = useGameSelection();
   const hostRef = useRef<HTMLDivElement>(null);
+  const gameRef = useRef<Phaser.Game | null>(null);
+  const inventoryOpenRef = useRef(false);
+  const toggleInventoryRef = useRef<() => void>(() => {});
+  const closeInventoryRef = useRef<() => void>(() => {});
   const [game, setGame] = useState<Game | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [inventory, setInventory] = useState<InventoryView>({ status: 'loading' });
+
+  toggleInventoryRef.current = () => {
+    const next = !inventoryOpenRef.current;
+    inventoryOpenRef.current = next;
+    gameRef.current?.registry.set(inventoryOpenKey, next);
+    setInventoryOpen(next);
+  };
+  closeInventoryRef.current = () => {
+    if (!inventoryOpenRef.current) {
+      return;
+    }
+    inventoryOpenRef.current = false;
+    gameRef.current?.registry.set(inventoryOpenKey, false);
+    setInventoryOpen(false);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -41,18 +66,52 @@ export function GamePage() {
     };
   }, [gameId, player?.id, select]);
 
-  const isOwner = Boolean(game && player && game.owner.id === player.id);
+  useEffect(() => {
+    if (!game || !player) {
+      return;
+    }
+    let cancelled = false;
+    setInventory({ status: 'loading' });
+    loadInventory(game.id).then((result) => {
+      if (cancelled) {
+        return;
+      }
+      if (!result.ok) {
+        setInventory({ status: 'error', message: result.message });
+        return;
+      }
+      setInventory({
+        status: 'ready',
+        inventory: { ...result.data, slots: result.data.slots ?? [] },
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [game?.id, player?.id]);
 
   useEffect(() => {
     const parent = hostRef.current;
-    if (!parent || !isOwner) {
+    if (!parent || !game || !player) {
       return;
     }
-    const world = mountGame(parent);
+    inventoryOpenRef.current = false;
+    setInventoryOpen(false);
+    const world = mountGame(parent, {
+      gameId: game.id,
+      worldSeed: game.worldSeed,
+      playerId: player.id,
+      login: player.login,
+      onToggleInventory: () => toggleInventoryRef.current(),
+      onCloseInventory: () => closeInventoryRef.current(),
+    });
+    gameRef.current = world;
     return () => {
+      inventoryOpenRef.current = false;
+      gameRef.current = null;
       world.destroy(true);
     };
-  }, [isOwner, game?.id]);
+  }, [game?.id, game?.worldSeed, player?.id, player?.login]);
 
   if (loading) {
     return (
@@ -62,28 +121,13 @@ export function GamePage() {
     );
   }
 
-  if (error || !game) {
+  if (error || !game || !player) {
     return (
       <main className="screen">
         <section className="panel">
           <p className="form-error" role="alert">
             {error || 'Игра не найдена'}
           </p>
-          <button type="button" onClick={() => navigate('/lobby')}>
-            В лобби
-          </button>
-        </section>
-      </main>
-    );
-  }
-
-  if (!isOwner) {
-    return (
-      <main className="screen">
-        <section className="panel">
-          <h1>{game.name}</h1>
-          <p className="game-id">{game.id}</p>
-          <p>Войти в чужую игру пока нельзя.</p>
           <button type="button" onClick={() => navigate('/lobby')}>
             В лобби
           </button>
@@ -107,6 +151,7 @@ export function GamePage() {
           В лобби
         </button>
       </div>
+      {inventoryOpen ? <InventoryModal view={inventory} onClose={() => closeInventoryRef.current()} /> : null}
     </div>
   );
 }

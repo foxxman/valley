@@ -12,6 +12,10 @@ flowchart TD
   server --> health["internal/health"]
   httpapi --> auth["internal/auth"]
   httpapi --> game["internal/game"]
+  httpapi --> realtime["internal/realtime"]
+  httpapi --> presence["internal/presence"]
+  presence --> realtime
+  presence --> game
   auth --> player["internal/player"]
   auth --> db[(PostgreSQL)]
   game --> db
@@ -30,11 +34,17 @@ flowchart TD
 | `internal/auth` | Регистрация, вход, JWT access, refresh-токены |
 | `internal/player` | Игрок и таблица `players` |
 | `internal/game` | Игры владельца и таблица `games` |
+| `internal/realtime` | Канал сообщений: соединения, комнаты, рассылка конвертов |
+| `internal/presence` | Кто сейчас в игре и где стоит. Координаты только в памяти процесса |
 | `docs` | Сгенерированная OpenAPI-спека |
 
 Запрос идёт так: хендлер читает JSON и cookie, сервис проверяет правила, репозиторий пишет в Postgres. Ошибки сервиса хендлер переводит в код и JSON вида `{ "error": { "code", "message" } }`.
 
 Сессия состоит из двух HttpOnly cookie. `access_token` — JWT с коротким сроком, путь `/`. `refresh_token` хранится в базе только как хеш, путь `/api/auth`. При обновлении сессии старый refresh удаляется и выпускается новая пара.
+
+`GET /api/ws` — общий канал живых сообщений. Сейчас через него видно, кто находится в игре, и передаются координаты. Каталог событий в эту документацию не входит. Игра, сид и вход в мир остаются обычными HTTP-запросами: достаточно знать id игры. Координаты в Postgres не пишутся и пропадают вместе с соединением.
+
+При создании игры можно передать `worldSeed` — целое число от 0 до 4 294 967 295. Если поле пустое, сервер выбирает сид сам и сохраняет его в игре. Одинаковый сид собирает одну и ту же карту. Уже существующие игры при миграции получают сид `42`, как раньше на клиенте.
 
 Роуты:
 
@@ -46,6 +56,7 @@ flowchart TD
 | `GET` | `/api/auth/me` | `access_token` |
 | `POST`, `GET` | `/api/games` | `access_token` |
 | `GET`, `PATCH` | `/api/games/{id}` | `access_token` |
+| `GET` | `/api/ws` | `access_token`, переход на WebSocket |
 | `GET` | `/swagger/index.html` | открытый |
 
 ## Схема БД
@@ -78,6 +89,7 @@ flowchart TD
 | `id` | `UUID` | PK, `gen_random_uuid()` |
 | `name` | `TEXT` | длина 1–40 |
 | `owner_id` | `UUID` | FK → `players.id` `ON DELETE CASCADE` |
+| `world_seed` | `BIGINT` | от 0 до 4 294 967 295 |
 | `created_at` | `TIMESTAMPTZ` | `now()` |
 | `updated_at` | `TIMESTAMPTZ` | `now()` |
 

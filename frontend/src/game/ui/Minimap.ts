@@ -27,7 +27,6 @@ const COLOR = {
   FrameOuter: 0x1a2332,
   FrameAccent: 0x63c5cf,
   FrameInner: 0xffffff,
-  LocalPlayer: 0xffeb3b,
 } as const;
 
 function terrainColor(world: ChunkWorld, tileX: number, tileY: number): number {
@@ -47,38 +46,55 @@ type MinimapOptions = {
 };
 
 /**
- * Fixed HUD minimap (top-right). Local player is always drawn at the center;
- * other markers are offset relative to them.
+ * Fixed HUD minimap (top-right). Local player is always drawn at the center.
+ * Other players inside the window sit on their tile. Players outside stick to
+ * the border and only slide along it, as a direction toward them.
  */
 export class Minimap {
   private readonly scene: Phaser.Scene;
   private readonly graphics: Phaser.GameObjects.Graphics;
+  private readonly coords: Phaser.GameObjects.Text;
   private readonly cellPx: number;
   private lastCenterTileX = Number.NaN;
   private lastCenterTileY = Number.NaN;
+  private lastLocalColor: number | null = null;
   private lastMarkers: ReadonlyArray<MinimapMarker> = [];
 
   constructor({ scene, depth = 200 }: MinimapOptions) {
     this.scene = scene;
     this.cellPx = SIZE_PX / TILES_ACROSS;
     this.graphics = scene.add.graphics().setScrollFactor(0).setDepth(depth);
+    this.coords = scene.add
+      .text(0, 0, '', {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: '#ffffff',
+        backgroundColor: '#00000088',
+        padding: { x: 4, y: 2 },
+      })
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(depth);
   }
 
   /**
-   * @param markers — optional remote players etc.; local player is always centered
-   *   and drawn as LocalPlayer color (do not include local in markers).
+   * @param localColor — server-assigned color of this connection; null until it arrives.
+   * @param markers — other players. Do not include the local player.
    */
   update(
     world: ChunkWorld,
     localTileX: number,
     localTileY: number,
+    localColor: number | null,
     markers: ReadonlyArray<MinimapMarker> = [],
   ): void {
     this.layout();
+    this.coords.setText(`x ${localTileX}  y ${localTileY}`);
 
     const terrainMoved =
       localTileX !== this.lastCenterTileX || localTileY !== this.lastCenterTileY;
-    if (!terrainMoved && this.sameMarkers(markers)) {
+    const colorChanged = localColor !== this.lastLocalColor;
+    if (!terrainMoved && !colorChanged && this.sameMarkers(markers)) {
       return;
     }
 
@@ -91,18 +107,23 @@ export class Minimap {
         minimapChunkRadius(world.chunkSize),
       );
     }
+    this.lastLocalColor = localColor;
     this.lastMarkers = markers.map((marker) => ({ ...marker }));
 
     this.graphics.clear();
     this.drawPanel();
     this.drawTerrain(world, localTileX, localTileY);
-    this.drawMarkers(localTileX, localTileY, markers);
-    this.drawLocalPlayer();
+    this.drawInsideMarkers(localTileX, localTileY, markers);
     this.drawFrame();
+    this.drawEdgeMarkers(localTileX, localTileY, markers);
+    if (localColor !== null) {
+      this.drawLocalPlayer(localColor);
+    }
   }
 
   destroy(): void {
     this.graphics.destroy();
+    this.coords.destroy();
   }
 
   private sameMarkers(markers: ReadonlyArray<MinimapMarker>): boolean {
@@ -122,7 +143,9 @@ export class Minimap {
 
   private layout(): void {
     const cam = this.scene.cameras.main;
-    this.graphics.setPosition(cam.width - SIZE_PX - PADDING_PX, PADDING_PX);
+    const top = PADDING_PX;
+    this.graphics.setPosition(cam.width - SIZE_PX - PADDING_PX, top);
+    this.coords.setPosition(cam.width - PADDING_PX, top + SIZE_PX + 6);
   }
 
   private drawPanel(): void {
@@ -160,7 +183,7 @@ export class Minimap {
     }
   }
 
-  private drawMarkers(
+  private drawInsideMarkers(
     centerX: number,
     centerY: number,
     markers: ReadonlyArray<MinimapMarker>,
@@ -168,24 +191,64 @@ export class Minimap {
     for (const marker of markers) {
       const dx = marker.tileX - centerX;
       const dy = marker.tileY - centerY;
-      if (Math.abs(dx) > HALF_TILES || Math.abs(dy) > HALF_TILES) {
+      if (!this.isInside(dx, dy)) {
         continue;
       }
       this.drawDot(dx, dy, marker.color);
     }
   }
 
-  private drawLocalPlayer(): void {
-    this.drawDot(0, 0, COLOR.LocalPlayer);
+  private drawEdgeMarkers(
+    centerX: number,
+    centerY: number,
+    markers: ReadonlyArray<MinimapMarker>,
+  ): void {
+    for (const marker of markers) {
+      const dx = marker.tileX - centerX;
+      const dy = marker.tileY - centerY;
+      if (this.isInside(dx, dy)) {
+        continue;
+      }
+      const point = this.edgePoint(dx, dy);
+      this.drawDotAt(point.x, point.y, marker.color);
+    }
+  }
+
+  private isInside(dx: number, dy: number): boolean {
+    return Math.abs(dx) <= HALF_TILES && Math.abs(dy) <= HALF_TILES;
+  }
+
+  /** Direction clamped to the inner side of the square border. */
+  private edgePoint(dx: number, dy: number): { x: number; y: number } {
+    const furthest = Math.max(Math.abs(dx), Math.abs(dy));
+    const nx = dx / furthest;
+    const ny = dy / furthest;
+    const reach = SIZE_PX / 2 - this.dotRadius();
+    return {
+      x: SIZE_PX / 2 + nx * reach,
+      y: SIZE_PX / 2 + ny * reach,
+    };
+  }
+
+  private drawLocalPlayer(color: number): void {
+    this.drawDot(0, 0, color);
   }
 
   private drawDot(dx: number, dy: number, color: number): void {
     const cx = (dx + HALF_TILES + 0.5) * this.cellPx;
     const cy = (dy + HALF_TILES + 0.5) * this.cellPx;
-    const radius = Math.max(2, this.cellPx * 0.9);
+    this.drawDotAt(cx, cy, color);
+  }
+
+  private drawDotAt(x: number, y: number, color: number): void {
+    const radius = this.dotRadius();
     this.graphics.fillStyle(color, 1);
-    this.graphics.fillCircle(cx, cy, radius);
+    this.graphics.fillCircle(x, y, radius);
     this.graphics.lineStyle(1, 0x000000, 0.45);
-    this.graphics.strokeCircle(cx, cy, radius);
+    this.graphics.strokeCircle(x, y, radius);
+  }
+
+  private dotRadius(): number {
+    return Math.max(2, this.cellPx * 0.9);
   }
 }

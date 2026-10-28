@@ -42,3 +42,21 @@ func TestValidID(t *testing.T) {
 		t.Fatal("partial id should be rejected")
 	}
 }
+
+func TestValidWorldSeed(t *testing.T) {
+	if !ValidWorldSeed(0) || !ValidWorldSeed(MaxWorldSeed) {
+		t.Fatal("edges of the uint32 range should be valid")
+	}
+	if ValidWorldSeed(-1) || ValidWorldSeed(MaxWorldSeed+1) {
+		t.Fatal("seed outside uint32 range should be rejected")
+	}
+}
+
+func TestRandomWorldSeed(t *testing.T) {
+	for range 8 {
+		seed, err := RandomWorldSeed()
+		if err != nil || !ValidWorldSeed(seed) {
+			t.Fatalf("seed %d err %v", seed, err)
+		}
+	}
+}

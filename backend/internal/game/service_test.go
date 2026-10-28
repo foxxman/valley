@@ -8,7 +8,7 @@ import (
 
 func TestCreateTrimsName(t *testing.T) {
 	store := &fakeStore{}
-	created, err := NewService(store).Create(context.Background(), ownerID, "  Долина  ")
+	created, err := NewService(store).Create(context.Background(), ownerID, "  Долина  ", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -17,8 +17,42 @@ func TestCreateTrimsName(t *testing.T) {
 	}
 }
 
+func TestCreateKeepsSeed(t *testing.T) {
+	store := &fakeStore{}
+	seed := int64(42)
+	created, err := NewService(store).Create(context.Background(), ownerID, "Долина", &seed)
+	if err != nil || created.WorldSeed != 42 || store.gotSeed != 42 {
+		t.Fatalf("created %+v seed %d err %v", created, store.gotSeed, err)
+	}
+}
+
+func TestCreateGeneratesSeed(t *testing.T) {
+	store := &fakeStore{}
+	svc := NewService(store)
+	svc.newSeed = func() (int64, error) { return 7, nil }
+	created, err := svc.Create(context.Background(), ownerID, "Долина", nil)
+	if err != nil || created.WorldSeed != 7 || store.gotSeed != 7 {
+		t.Fatalf("created %+v seed %d err %v", created, store.gotSeed, err)
+	}
+}
+
+func TestCreateRejectsSeed(t *testing.T) {
+	store := &fakeStore{}
+	tooBig := MaxWorldSeed + 1
+	negative := int64(-1)
+	for _, seed := range []int64{tooBig, negative} {
+		_, err := NewService(store).Create(context.Background(), ownerID, "Долина", &seed)
+		if err != ErrInvalidSeed {
+			t.Fatalf("seed %d err %v", seed, err)
+		}
+	}
+	if store.creates != 0 {
+		t.Fatalf("store calls %d", store.creates)
+	}
+}
+
 func TestCreateRejectsBlankName(t *testing.T) {
-	_, err := NewService(&fakeStore{}).Create(context.Background(), ownerID, "  ")
+	_, err := NewService(&fakeStore{}).Create(context.Background(), ownerID, "  ", nil)
 	if err != ErrInvalidName {
 		t.Fatalf("err %v", err)
 	}
@@ -27,7 +61,7 @@ func TestCreateRejectsBlankName(t *testing.T) {
 func TestRenameOwnerAndStranger(t *testing.T) {
 	store := &fakeStore{}
 	svc := NewService(store)
-	created, err := svc.Create(context.Background(), ownerID, "Долина")
+	created, err := svc.Create(context.Background(), ownerID, "Долина", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,14 +103,19 @@ const ownerID = "11111111-1111-1111-1111-111111111111"
 type fakeStore struct {
 	byID      map[string]Game
 	findCalls int
+	creates   int
+	gotSeed   int64
 }
 
-func (f *fakeStore) Create(_ context.Context, ownerID, name string) (Game, error) {
+func (f *fakeStore) Create(_ context.Context, ownerID, name string, worldSeed int64) (Game, error) {
+	f.creates++
+	f.gotSeed = worldSeed
 	created := Game{
 		ID:         "33333333-3333-3333-3333-333333333333",
 		Name:       name,
 		OwnerID:    ownerID,
 		OwnerLogin: "fox",
+		WorldSeed:  worldSeed,
 		CreatedAt:  time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC),
 		UpdatedAt:  time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC),
 	}

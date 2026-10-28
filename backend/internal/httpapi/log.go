@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"bufio"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -27,6 +29,35 @@ func (w *statusWriter) Write(body []byte) (int, error) {
 		w.WriteHeader(http.StatusOK)
 	}
 	return w.ResponseWriter.Write(body)
+}
+
+func (w *statusWriter) Flush() {
+	if !w.written {
+		w.WriteHeader(http.StatusOK)
+	}
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, http.ErrNotSupported
+	}
+	conn, reader, err := hijacker.Hijack()
+	if err != nil {
+		return nil, nil, err
+	}
+	w.status = http.StatusSwitchingProtocols
+	w.written = true
+	// http.Server deadlines stay on the hijacked conn and would close a live socket.
+	_ = conn.SetDeadline(time.Time{})
+	return conn, reader, nil
+}
+
+func (w *statusWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 // LogRequests writes one line per request: method, path, status, duration.

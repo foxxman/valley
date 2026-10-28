@@ -58,7 +58,9 @@ export function LobbyPage() {
           }}
         />
       ) : null}
-      {dialog === 'find' ? <FindGameDialog onClose={() => setDialog(null)} /> : null}
+      {dialog === 'find' ? (
+        <FindGameDialog onClose={() => setDialog(null)} onJoin={enterGame} />
+      ) : null}
       {dialog === 'mine' ? (
         <MyGamesDialog onClose={() => setDialog(null)} onEnter={enterGame} />
       ) : null}

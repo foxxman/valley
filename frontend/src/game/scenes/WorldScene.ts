@@ -1,8 +1,12 @@
 import Phaser from 'phaser';
 import { ASSET_URLS, AssetKey } from '../assets';
+import { playSessionKey, type PlaySession } from '../config';
+import { inventoryOpenKey } from '../inventory/open';
 import { gameEnv } from '../env';
 import { Player } from '../entities/Player';
-import { Minimap, minimapChunkRadius } from '../ui/Minimap';
+import { RemoteAvatar } from '../entities/RemoteAvatar';
+import { openGameChannel, type GameChannel, type RemotePlayer } from '../net/channel';
+import { Minimap, minimapChunkRadius, type MinimapMarker } from '../ui/Minimap';
 import { ChunkWorld } from '../world/chunkWorld';
 import { FLORA_ASSET } from '../world/flora';
 import { resolveTerrainVisual } from '../world/terrainVisual';
@@ -19,13 +23,25 @@ const DRAW_KEEP_RADIUS_CHUNKS = 2;
  * neighbors would be generated and dropped on every step.
  */
 const DATA_KEEP_PADDING_CHUNKS = 1;
+const POSITION_INTERVAL_MS = 50;
 
 export class WorldScene extends Phaser.Scene {
   private player: Player | null = null;
   private world: ChunkWorld | null = null;
   private minimap: Minimap | null = null;
+  private channel: GameChannel | null = null;
+  private readonly remotes = new Map<string, RemoteAvatar>();
   private readonly chunkVisuals = new Map<string, ChunkVisuals>();
+  private latestRemotes: RemotePlayer[] = [];
+  private selfColor: number | null = null;
+  private remotesDirty = false;
   private tileSize = 32;
+  private lastSentX = Number.NaN;
+  private lastSentY = Number.NaN;
+  private lastSentAt = Number.NEGATIVE_INFINITY;
+  private positionDue = false;
+  private inventoryKey: Phaser.Input.Keyboard.Key | null = null;
+  private closeInventoryKey: Phaser.Input.Keyboard.Key | null = null;
 
   constructor() {
     super('WorldScene');
@@ -38,13 +54,19 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
-    const { tileSize, worldSeed, chunkSize } = gameEnv;
+    const session = this.game.registry.get(playSessionKey) as PlaySession | undefined;
+    if (!session) {
+      throw new Error('Play session is missing');
+    }
+    const { tileSize, chunkSize } = gameEnv;
     this.tileSize = tileSize;
-    this.world = new ChunkWorld(worldSeed, chunkSize);
+    this.world = new ChunkWorld(session.worldSeed, chunkSize);
 
     const originCenter = Math.floor(this.world.chunkSize / 2);
     const spawnX = originCenter * tileSize + tileSize / 2;
     const spawnY = originCenter * tileSize + tileSize / 2;
+    this.lastSentX = spawnX;
+    this.lastSentY = spawnY;
 
     this.ensureAndDrawAround(originCenter, originCenter, LOAD_RADIUS_CHUNKS);
 
@@ -56,13 +78,40 @@ export class WorldScene extends Phaser.Scene {
       tileSize,
     });
 
+    this.channel = openGameChannel({
+      gameId: session.gameId,
+      selfId: session.playerId,
+      x: spawnX,
+      y: spawnY,
+      onPresence: ({ selfColor, players }) => {
+        this.selfColor = selfColor;
+        this.latestRemotes = players;
+        this.remotesDirty = true;
+      },
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.channel?.close();
+      this.channel = null;
+      for (const avatar of this.remotes.values()) {
+        avatar.destroy();
+      }
+      this.remotes.clear();
+    });
+
     // No setBounds — infinite world; player locked to screen center.
     this.cameras.main.startFollow(this.player.sprite, true, 1, 1);
     this.cameras.main.setRoundPixels(true);
     this.cameras.main.setBackgroundColor(0x0b1020);
 
+    const keyboard = this.input.keyboard;
+    if (!keyboard) {
+      throw new Error('Keyboard input is required for the inventory');
+    }
+    this.inventoryKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
+    this.closeInventoryKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+
     this.add
-      .text(12, 12, 'WASD / стрелки — движение', {
+      .text(12, 12, 'WASD / стрелки — движение\nI — инвентарь', {
         fontFamily: 'monospace',
         fontSize: '14px',
         color: '#ffffff',
@@ -75,8 +124,14 @@ export class WorldScene extends Phaser.Scene {
     this.minimap = new Minimap({ scene: this });
   }
 
-  update(_time: number, delta: number): void {
+  update(time: number, delta: number): void {
+    this.readInventoryKeys();
     this.player?.update(delta);
+    this.publishPosition(time);
+    this.syncRemotes();
+    for (const avatar of this.remotes.values()) {
+      avatar.update(delta);
+    }
     if (!this.player || !this.world) {
       return;
     }
@@ -85,12 +140,90 @@ export class WorldScene extends Phaser.Scene {
     const tileY = Math.floor(this.player.sprite.y / this.tileSize);
     this.ensureAndDrawAround(tileX, tileY, LOAD_RADIUS_CHUNKS);
     this.cullFarChunks(tileX, tileY, DRAW_KEEP_RADIUS_CHUNKS);
-    this.minimap?.update(this.world, tileX, tileY);
+    this.minimap?.update(this.world, tileX, tileY, this.selfColor, this.remoteMarkers());
     const dataKeep = Math.max(
       DRAW_KEEP_RADIUS_CHUNKS,
       minimapChunkRadius(this.world.chunkSize),
     );
     this.world.releaseFarChunks(tileX, tileY, dataKeep + DATA_KEEP_PADDING_CHUNKS);
+  }
+
+  private readInventoryKeys(): void {
+    const session = this.game.registry.get(playSessionKey) as PlaySession | undefined;
+    if (!session || isTextEntry(document.activeElement)) {
+      return;
+    }
+    if (this.inventoryKey && Phaser.Input.Keyboard.JustDown(this.inventoryKey)) {
+      session.onToggleInventory();
+    }
+    if (
+      this.closeInventoryKey &&
+      Phaser.Input.Keyboard.JustDown(this.closeInventoryKey) &&
+      this.game.registry.get(inventoryOpenKey) === true
+    ) {
+      session.onCloseInventory();
+    }
+  }
+
+  private publishPosition(now: number): void {
+    if (!this.player || !this.channel) {
+      return;
+    }
+    const x = this.player.sprite.x;
+    const y = this.player.sprite.y;
+    if (Math.hypot(x - this.lastSentX, y - this.lastSentY) >= 0.5) {
+      this.positionDue = true;
+    }
+    if (!this.positionDue || now - this.lastSentAt < POSITION_INTERVAL_MS) {
+      return;
+    }
+    this.channel.move(x, y);
+    this.lastSentX = x;
+    this.lastSentY = y;
+    this.lastSentAt = now;
+    this.positionDue = false;
+  }
+
+  private syncRemotes(): void {
+    const world = this.world;
+    if (!this.remotesDirty || !world) {
+      return;
+    }
+    this.remotesDirty = false;
+    const alive = new Set(this.latestRemotes.map((player) => player.playerId));
+    for (const [id, avatar] of this.remotes) {
+      if (alive.has(id)) {
+        continue;
+      }
+      avatar.destroy();
+      this.remotes.delete(id);
+    }
+    for (const player of this.latestRemotes) {
+      const existing = this.remotes.get(player.playerId);
+      if (existing) {
+        existing.moveTo(player.x, player.y);
+        continue;
+      }
+      this.remotes.set(
+        player.playerId,
+        new RemoteAvatar({
+          scene: this,
+          x: player.x,
+          y: player.y,
+          login: player.login,
+          tileSize: this.tileSize,
+          world,
+        }),
+      );
+    }
+  }
+
+  private remoteMarkers(): MinimapMarker[] {
+    return this.latestRemotes.map((player) => ({
+      tileX: Math.floor(player.x / this.tileSize),
+      tileY: Math.floor(player.y / this.tileSize),
+      color: player.color,
+    }));
   }
 
   private ensureAndDrawAround(tileX: number, tileY: number, radiusChunks: number): void {
@@ -178,4 +311,14 @@ export class WorldScene extends Phaser.Scene {
       }
     }
   }
+}
+
+const textEntryTags: Record<string, true> = {
+  INPUT: true,
+  TEXTAREA: true,
+  SELECT: true,
+};
+
+function isTextEntry(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && (textEntryTags[target.tagName] === true || target.isContentEditable);
 }

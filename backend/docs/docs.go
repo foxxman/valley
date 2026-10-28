@@ -269,12 +269,12 @@ const docTemplate = `{
                 "summary": "Создать игру",
                 "parameters": [
                     {
-                        "description": "Название",
+                        "description": "Название и необязательный сид",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/gameName"
+                            "$ref": "#/definitions/createGame"
                         }
                     }
                 ],
@@ -286,7 +286,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "invalid_body или invalid_name",
+                        "description": "invalid_body, invalid_name или invalid_seed",
                         "schema": {
                             "$ref": "#/definitions/errorResponse"
                         }
@@ -430,6 +430,85 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/games/{id}/inventory": {
+            "get": {
+                "security": [
+                    {
+                        "AccessCookie": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Инвентарь игрока",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID игры",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/inventory"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "game_not_found",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ws": {
+            "get": {
+                "security": [
+                    {
+                        "AccessCookie": []
+                    }
+                ],
+                "description": "Переключение протокола на WebSocket. Каталог событий в эту спецификацию не входит. Игра и сид запрашиваются обычными HTTP-ручками.",
+                "tags": [
+                    "realtime"
+                ],
+                "summary": "Канал сообщений",
+                "responses": {
+                    "101": {
+                        "description": "WebSocket",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/healthcheck": {
             "get": {
                 "produces": [
@@ -457,6 +536,20 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "createGame": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "Северная долина"
+                },
+                "worldSeed": {
+                    "description": "Необязательный сид мира. Пустое значение — сервер выбирает его сам.",
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
         "credentials": {
             "type": "object",
             "properties": {
@@ -509,6 +602,10 @@ const docTemplate = `{
                 "updatedAt": {
                     "type": "string",
                     "example": "2026-01-02T15:04:05Z"
+                },
+                "worldSeed": {
+                    "type": "integer",
+                    "example": 42
                 }
             }
         },
@@ -542,6 +639,66 @@ const docTemplate = `{
                 "status": {
                     "type": "string",
                     "example": "ok"
+                }
+            }
+        },
+        "inventory": {
+            "type": "object",
+            "properties": {
+                "capacity": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "slots": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/inventorySlot"
+                    }
+                }
+            }
+        },
+        "inventorySlot": {
+            "type": "object",
+            "properties": {
+                "index": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "item": {
+                    "$ref": "#/definitions/item"
+                },
+                "quantity": {
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "item": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "example": "Сухие ветки"
+                },
+                "iconKey": {
+                    "type": "string",
+                    "example": "item-wood"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "44444444-4444-4444-4444-444444444444"
+                },
+                "maxStack": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Дерево"
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "wood"
                 }
             }
         },
