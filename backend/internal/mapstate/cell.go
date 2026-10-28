@@ -3,10 +3,11 @@ package mapstate
 // Layers stored for every game in one table. A missing row means the world
 // seed still owns that layer. A stored NULL means the layer was cleared.
 const (
-	LayerTerrain = "terrain"
-	LayerTree    = "tree"
-	LayerFlora   = "flora"
-	LayerFeature = "feature"
+	LayerTerrain    = "terrain"
+	LayerTree       = "tree"
+	LayerFlora      = "flora"
+	LayerFeature    = "feature"
+	LayerDurability = "durability"
 )
 
 var flowerSlugs = map[string]struct{}{

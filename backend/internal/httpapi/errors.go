@@ -43,9 +43,9 @@ var errorMessage = map[string]string{
 	"invalid_seed":        "Сид: целое число от 0 до 4 294 967 295",
 	"game_not_found":      "Игра не найдена",
 	"forbidden":           "Менять название может только владелец",
-	"invalid_kind":        "Неизвестный цветок",
+	"invalid_kind":        "Неизвестный объект",
 	"not_in_reach":        "Слишком далеко",
-	"already_taken":       "Этот цветок уже сорван",
+	"already_taken":       "Здесь уже ничего нет",
 	"bag_full":            "Рюкзак полон",
 	"internal":            "Внутренняя ошибка",
 }

@@ -17,6 +17,33 @@ const (
 	playerID = "11111111-1111-1111-1111-111111111111"
 )
 
+func TestStrikeRejectsKindBeforeIO(t *testing.T) {
+	games := &fakeGames{}
+	begin := &failBegin{t: t}
+	_, err := NewService(begin, idleCells{t: t}, idleBags{t}, games, fakePresence{}).Strike(
+		context.Background(), gameID, playerID, 1, 1, "flower-0",
+	)
+	if !errors.Is(err, ErrInvalidKind) {
+		t.Fatalf("err %v", err)
+	}
+	if games.calls != 0 || begin.calls != 0 {
+		t.Fatalf("games %d begins %d", games.calls, begin.calls)
+	}
+}
+
+func TestStrikeNotInReach(t *testing.T) {
+	begin := &failBegin{t: t}
+	cells := idleCells{t: t}
+	svc := NewService(begin, cells, idleBags{t}, &fakeGames{}, fakePresence{x: 0, y: 0, ok: true})
+	_, err := svc.Strike(context.Background(), gameID, playerID, 2, 0, "tree")
+	if !errors.Is(err, ErrNotInReach) {
+		t.Fatalf("err %v", err)
+	}
+	if begin.calls != 0 {
+		t.Fatalf("begins %d", begin.calls)
+	}
+}
+
 func TestGatherRejectsKindBeforeIO(t *testing.T) {
 	games := &fakeGames{}
 	begin := &failBegin{t: t}
@@ -151,11 +178,16 @@ func (c idleCells) ClaimFlora(context.Context, pgx.Tx, string, int, int) (mapsta
 	return mapstate.FloraClaim{}, nil
 }
 
+func (c idleCells) Hit(context.Context, pgx.Tx, string, int, int, int, int, mapstate.Clear) (mapstate.Hit, error) {
+	c.t.Fatal("hit")
+	return mapstate.Hit{}, nil
+}
+
 type idleBags struct {
 	t *testing.T
 }
 
-func (b idleBags) Grant(context.Context, pgx.Tx, string, string, string) error {
+func (b idleBags) Grant(context.Context, pgx.Tx, string, string, string, int) error {
 	b.t.Fatal("grant")
 	return nil
 }

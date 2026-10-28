@@ -1,6 +1,7 @@
 import type { MapCell, MapLayers } from '../map/types';
 import { generateChunkTerrain } from './generate-chunk';
 import { FloraKind } from './flora';
+import { NodeKind, nodeDurability } from './nodes';
 import { TileType, TILE_WALKABLE } from './tiles';
 
 export const DEFAULT_CHUNK_SIZE = 16;
@@ -56,6 +57,17 @@ function floorDiv(value: number, size: number): number {
 
 function mod(value: number, size: number): number {
   return ((value % size) + size) % size;
+}
+
+function remainingDurability(value: string | null | undefined): number | null {
+  if (typeof value !== 'string' || !/^[0-9]+$/.test(value)) {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return null;
+  }
+  return parsed;
 }
 
 function blankFeatures(size: number): Array<string | null> {
@@ -139,6 +151,39 @@ export class ChunkWorld {
       return;
     }
     this.paint(chunk, located.lx, located.ly, cell.layers);
+  }
+
+  /**
+   * Cells whose durability layer holds a positive remainder.
+   * A cleared tree hides the bar even if a stale number is still stored.
+   */
+  damagedCells(): Array<{ x: number; y: number; remaining: number; max: number }> {
+    const found: Array<{ x: number; y: number; remaining: number; max: number }> = [];
+    for (const [key, layers] of this.overrides) {
+      if (layers.tree === null) {
+        continue;
+      }
+      const remaining = remainingDurability(layers.durability);
+      if (remaining === null) {
+        continue;
+      }
+      const [xText, yText] = key.split(',');
+      const x = Number(xText);
+      const y = Number(yText);
+      found.push({ x, y, remaining, max: this.breakableMax(x, y) });
+    }
+    return found;
+  }
+
+  /** Полная прочность клетки: камень дольше дерева. Осколки сюда не входят. */
+  private breakableMax(tileX: number, tileY: number): number {
+    if (this.hasTreeAt(tileX, tileY)) {
+      return nodeDurability[NodeKind.Tree];
+    }
+    if (this.getTileAt(tileX, tileY) === TileType.Stone) {
+      return nodeDurability[NodeKind.Stone];
+    }
+    return nodeDurability[NodeKind.Tree];
   }
 
   /**

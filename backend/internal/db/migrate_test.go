@@ -10,7 +10,7 @@ func TestMigrationFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("files: %v", err)
 	}
-	if len(names) != 5 || names[0] != "001_players.sql" || names[1] != "002_games.sql" || names[2] != "003_game_seed.sql" || names[3] != "004_inventory.sql" || names[4] != "005_map.sql" {
+	if len(names) != 7 || names[0] != "001_players.sql" || names[1] != "002_games.sql" || names[2] != "003_game_seed.sql" || names[3] != "004_inventory.sql" || names[4] != "005_map.sql" || names[5] != "006_durability.sql" || names[6] != "007_stone.sql" {
 		t.Fatalf("names %v", names)
 	}
 
@@ -103,6 +103,36 @@ func TestMigrationFiles(t *testing.T) {
 	} {
 		if !strings.Contains(journalSQL, fragment) {
 			t.Fatalf("map migration missing %q", fragment)
+		}
+	}
+
+	durability, err := migrationsFS.ReadFile("migrations/006_durability.sql")
+	if err != nil {
+		t.Fatalf("read durability: %v", err)
+	}
+	durabilitySQL := string(durability)
+	for _, fragment := range []string{
+		"ALTER TABLE map_cells DROP CONSTRAINT map_cells_layer",
+		"CHECK (layer IN ('terrain', 'tree', 'flora', 'feature', 'durability'))",
+		"('wood', 'Древесина', 'wood', '', 99)",
+		"ON CONFLICT (slug) DO NOTHING",
+	} {
+		if !strings.Contains(durabilitySQL, fragment) {
+			t.Fatalf("durability migration missing %q", fragment)
+		}
+	}
+
+	stone, err := migrationsFS.ReadFile("migrations/007_stone.sql")
+	if err != nil {
+		t.Fatalf("read stone: %v", err)
+	}
+	stoneSQL := string(stone)
+	for _, fragment := range []string{
+		"('stone', 'Камень', 'stone', '', 99)",
+		"ON CONFLICT (slug) DO NOTHING",
+	} {
+		if !strings.Contains(stoneSQL, fragment) {
+			t.Fatalf("stone migration missing %q", fragment)
 		}
 	}
 }

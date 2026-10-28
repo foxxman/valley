@@ -25,10 +25,10 @@ type inventorySlotBody struct {
 type itemBody struct {
 	ID          string `json:"id" example:"44444444-4444-4444-4444-444444444444"`
 	Slug        string `json:"slug" example:"wood"`
-	Name        string `json:"name" example:"Дерево"`
-	IconKey     string `json:"iconKey" example:"item-wood"`
-	Description string `json:"description" example:"Сухие ветки"`
-	MaxStack    int    `json:"maxStack" example:"20"`
+	Name        string `json:"name" example:"Древесина"`
+	IconKey     string `json:"iconKey" example:"wood"`
+	Description string `json:"description" example:""`
+	MaxStack    int    `json:"maxStack" example:"99"`
 } //@name item
 
 func RegisterInventory(mux *http.ServeMux, bags InventoryService, sessions PlayerSession) {

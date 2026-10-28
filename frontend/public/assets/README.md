@@ -8,6 +8,7 @@ Organized under `public/assets/`:
 | `water/` | water and shore |
 | `stones/` | stone and shards |
 | `vegetation/` | trees, flowers, tufts, lilies |
+| `items/` | inventory icons that are not placed on the map |
 | `player.png` | player (assets root) |
 
 | File | Role | Base orientation (angle 0) |
@@ -23,6 +24,8 @@ Organized under `public/assets/`:
 | `vegetation/flower_0.png` … `flower_3.png` | Flower overlays (walkable) | — |
 | `vegetation/lily.png` | Lilies on water (overlay) | — |
 | `vegetation/grass_tuft_1.png` | Grass tuft on land (overlay) | — |
+| `items/wood.png` | Wood item icon (bag only) | — |
+| `items/stone.png` | Stone item icon (bag only), Kenney Tiny Farm | — |
 | `player.png` | Player | — |
 
 Source: Kenney Roguelike RPG / Characters (CC0).

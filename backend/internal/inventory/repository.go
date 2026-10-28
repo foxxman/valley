@@ -24,10 +24,20 @@ func (r *Repository) ListTx(ctx context.Context, tx pgx.Tx, gameID, playerID str
 	return listSlots(ctx, tx, gameID, playerID, false)
 }
 
-// Grant adds one item inside the caller's transaction.
+type stackPlacement struct {
+	index  int
+	add    int
+	insert bool
+}
+
+// Grant adds quantity of one item inside the caller's transaction.
+// Either every unit fits, or the bag is unchanged and the error is ErrBagFull.
 // The advisory lock is taken before the slot read: FOR UPDATE locks nothing
-// when the bag is empty, so two gathers by the same player could both insert slot 0.
-func (r *Repository) Grant(ctx context.Context, tx pgx.Tx, gameID, playerID, slug string) error {
+// when the bag is empty, so two grants by the same player could both insert slot 0.
+func (r *Repository) Grant(ctx context.Context, tx pgx.Tx, gameID, playerID, slug string, quantity int) error {
+	if quantity < 1 {
+		return fmt.Errorf("grant quantity %d", quantity)
+	}
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`, gameID, playerID); err != nil {
 		return fmt.Errorf("lock bag: %w", err)
 	}
@@ -48,44 +58,70 @@ func (r *Repository) Grant(ctx context.Context, tx pgx.Tx, gameID, playerID, slu
 		return err
 	}
 
-	used := make(map[int]struct{}, len(slots))
-	stackIndex := -1
-	for _, slot := range slots {
-		used[slot.Index] = struct{}{}
-		if stackIndex >= 0 || slot.Item.ID != itemID || slot.Quantity >= maxStack {
+	placements, err := planGrant(slots, itemID, maxStack, quantity)
+	if err != nil {
+		return err
+	}
+	for _, place := range placements {
+		if place.insert {
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO inventory_slots (game_id, player_id, slot_index, item_id, quantity)
+				VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5)
+			`, gameID, playerID, place.index, itemID, place.add); err != nil {
+				return fmt.Errorf("insert slot: %w", err)
+			}
 			continue
 		}
-		stackIndex = slot.Index
-	}
-	if stackIndex >= 0 {
 		tag, err := tx.Exec(ctx, `
 			UPDATE inventory_slots
-			SET quantity = quantity + 1
+			SET quantity = quantity + $4
 			WHERE game_id = $1::uuid AND player_id = $2::uuid AND slot_index = $3
-				AND quantity < $4
-		`, gameID, playerID, stackIndex, maxStack)
+				AND quantity + $4 <= $5
+		`, gameID, playerID, place.index, place.add, maxStack)
 		if err != nil {
 			return fmt.Errorf("stack item: %w", err)
 		}
 		if tag.RowsAffected() != 1 {
 			return ErrBagFull
 		}
-		return nil
 	}
+	return nil
+}
 
-	for index := 0; index < Capacity; index++ {
+// planGrant fills existing stacks of itemID, then empty slots.
+// A shortfall returns ErrBagFull before any write.
+func planGrant(slots []Slot, itemID string, maxStack, quantity int) ([]stackPlacement, error) {
+	used := make(map[int]struct{}, len(slots))
+	placements := make([]stackPlacement, 0, 2)
+	remaining := quantity
+	for _, slot := range slots {
+		used[slot.Index] = struct{}{}
+		if remaining == 0 || slot.Item.ID != itemID || slot.Quantity >= maxStack {
+			continue
+		}
+		add := maxStack - slot.Quantity
+		if add > remaining {
+			add = remaining
+		}
+		placements = append(placements, stackPlacement{index: slot.Index, add: add})
+		remaining -= add
+	}
+	for index := 0; index < Capacity && remaining > 0; index++ {
 		if _, taken := used[index]; taken {
 			continue
 		}
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO inventory_slots (game_id, player_id, slot_index, item_id, quantity)
-			VALUES ($1::uuid, $2::uuid, $3, $4::uuid, 1)
-		`, gameID, playerID, index, itemID); err != nil {
-			return fmt.Errorf("insert slot: %w", err)
+		add := maxStack
+		if add > remaining {
+			add = remaining
 		}
-		return nil
+		placements = append(placements, stackPlacement{index: index, add: add, insert: true})
+		used[index] = struct{}{}
+		remaining -= add
 	}
-	return ErrBagFull
+	if remaining > 0 {
+		return nil, ErrBagFull
+	}
+	return placements, nil
 }
 
 type slotQuery interface {

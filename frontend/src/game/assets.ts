@@ -1,4 +1,4 @@
-/** Curated textures under /public/assets/{soil,water,stones,vegetation}. */
+/** Curated textures under /public/assets/{soil,water,stones,vegetation,items}. */
 export const AssetKey = {
   Grass: 'tile-grass',
   Water: 'tile-water',
@@ -14,6 +14,8 @@ export const AssetKey = {
   Flower3: 'flower-3',
   Lily: 'lily',
   GrassTuft1: 'grass-tuft-1',
+  Wood: 'wood',
+  ItemStone: 'stone',
   Player: 'player',
 } as const;
 
@@ -34,5 +36,7 @@ export const ASSET_URLS: Record<AssetKey, string> = {
   [AssetKey.Flower3]: '/assets/vegetation/flower_3.png',
   [AssetKey.Lily]: '/assets/vegetation/lily.png',
   [AssetKey.GrassTuft1]: '/assets/vegetation/grass_tuft_1.png',
+  [AssetKey.Wood]: '/assets/items/wood.png',
+  [AssetKey.ItemStone]: '/assets/items/stone.png',
   [AssetKey.Player]: '/assets/player.png',
 };

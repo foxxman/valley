@@ -21,6 +21,13 @@ export type Gathered = Inventory & {
   cell: MapCell;
 };
 
+export type Struck = {
+  broken: boolean;
+  cell: MapCell;
+  capacity?: number;
+  slots?: Inventory['slots'];
+};
+
 export function loadMap(gameId: string): Promise<MapResult<MapJournal>> {
   return send<MapJournal>(`/api/games/${encodeURIComponent(gameId)}/map`);
 }
@@ -30,6 +37,17 @@ export function gatherFlower(
   body: { x: number; y: number; kind: string },
 ): Promise<MapResult<Gathered>> {
   return send<Gathered>(`/api/games/${encodeURIComponent(gameId)}/actions/gather`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function strikeTree(
+  gameId: string,
+  body: { x: number; y: number; kind: string },
+): Promise<MapResult<Struck>> {
+  return send<Struck>(`/api/games/${encodeURIComponent(gameId)}/actions/strike`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

@@ -505,6 +505,81 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/games/{id}/actions/strike": {
+            "post": {
+                "security": [
+                    {
+                        "AccessCookie": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "map"
+                ],
+                "summary": "Ударить по объекту",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID игры",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Клетка и вид объекта",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/strikeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/strikeResult"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid_body, invalid_kind или not_in_reach",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "game_not_found",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "already_taken или bag_full",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/games/{id}/inventory": {
             "get": {
                 "security": [
@@ -839,11 +914,11 @@ const docTemplate = `{
             "properties": {
                 "description": {
                     "type": "string",
-                    "example": "Сухие ветки"
+                    "example": ""
                 },
                 "iconKey": {
                     "type": "string",
-                    "example": "item-wood"
+                    "example": "wood"
                 },
                 "id": {
                     "type": "string",
@@ -851,11 +926,11 @@ const docTemplate = `{
                 },
                 "maxStack": {
                     "type": "integer",
-                    "example": 20
+                    "example": 99
                 },
                 "name": {
                     "type": "string",
-                    "example": "Дерево"
+                    "example": "Древесина"
                 },
                 "slug": {
                     "type": "string",
@@ -903,6 +978,45 @@ const docTemplate = `{
                 "login": {
                     "type": "string",
                     "example": "player_one"
+                }
+            }
+        },
+        "strikeRequest": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "example": "tree"
+                },
+                "x": {
+                    "type": "integer",
+                    "example": 4
+                },
+                "y": {
+                    "type": "integer",
+                    "example": 5
+                }
+            }
+        },
+        "strikeResult": {
+            "type": "object",
+            "properties": {
+                "broken": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "capacity": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "cell": {
+                    "$ref": "#/definitions/mapCell"
+                },
+                "slots": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/inventorySlot"
+                    }
                 }
             }
         }

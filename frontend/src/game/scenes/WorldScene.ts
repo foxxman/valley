@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { ASSET_URLS, AssetKey } from '../assets';
 import { playSessionKey, type PlaySession } from '../config';
 import { inventoryOpenKey } from '../inventory/open';
-import { gatherFlower } from '../map/api';
+import { gatherFlower, strikeTree } from '../map/api';
 import type { MapCell } from '../map/types';
 import { gameEnv } from '../env';
 import { Player } from '../entities/Player';
@@ -11,8 +11,9 @@ import { openGameChannel, type GameChannel, type RemotePlayer } from '../net/cha
 import { Minimap, minimapChunkRadius, type MinimapMarker } from '../ui/Minimap';
 import { ChunkWorld } from '../world/chunkWorld';
 import { FLORA_ASSET } from '../world/flora';
-import { gatherTarget, type GatherTarget } from '../world/gatherTarget';
+import { actionTarget, ActionKind, type ActionTarget } from '../world/gatherTarget';
 import { resolveTerrainVisual } from '../world/terrainVisual';
+import { TileType } from '../world/tiles';
 
 type ChunkVisuals = Phaser.GameObjects.GameObject[];
 
@@ -27,6 +28,16 @@ const DRAW_KEEP_RADIUS_CHUNKS = 2;
  */
 const DATA_KEEP_PADDING_CHUNKS = 1;
 const POSITION_INTERVAL_MS = 50;
+const visualLayers: Record<string, true> = {
+  terrain: true,
+  tree: true,
+  flora: true,
+};
+const barFill: Array<{ min: number; color: number }> = [
+  { min: 0.5, color: 0x6fbf73 },
+  { min: 0.25, color: 0xe0b84d },
+  { min: 0, color: 0xd15b4c },
+];
 
 export class WorldScene extends Phaser.Scene {
   private player: Player | null = null;
@@ -47,6 +58,7 @@ export class WorldScene extends Phaser.Scene {
   private closeInventoryKey: Phaser.Input.Keyboard.Key | null = null;
   private gatherKey: Phaser.Input.Keyboard.Key | null = null;
   private highlight: Phaser.GameObjects.Graphics | null = null;
+  private durabilityBars: Phaser.GameObjects.Graphics | null = null;
   private gatherBusy = false;
   private alive = true;
 
@@ -123,9 +135,11 @@ export class WorldScene extends Phaser.Scene {
     this.closeInventoryKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     this.gatherKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     this.highlight = this.add.graphics().setDepth(9);
+    this.durabilityBars = this.add.graphics().setDepth(12);
+    this.paintDurability();
 
     this.add
-      .text(12, 12, 'WASD / стрелки — движение\nE — действие\nI — инвентарь', {
+      .text(12, 12, 'WASD / стрелки — движение\nE — собрать или добывать\nI — инвентарь', {
         fontFamily: 'monospace',
         fontSize: '14px',
         color: '#ffffff',
@@ -169,19 +183,21 @@ export class WorldScene extends Phaser.Scene {
     this.readGatherKey(target);
   }
 
-  private currentTarget(): GatherTarget | null {
+  private currentTarget(): ActionTarget | null {
     if (!this.player || !this.world) {
       return null;
     }
-    return gatherTarget(
+    return actionTarget(
       (x, y) => this.world?.floraAt(x, y) ?? null,
+      (x, y) => this.world?.hasTreeAt(x, y) ?? false,
+      (x, y) => this.world?.getTileAt(x, y) ?? TileType.Grass,
       Math.floor(this.player.sprite.x / this.tileSize),
       Math.floor(this.player.sprite.y / this.tileSize),
       this.player.facing,
     );
   }
 
-  private paintHighlight(target: GatherTarget | null): void {
+  private paintHighlight(target: ActionTarget | null): void {
     this.highlight?.clear();
     if (!target || !this.highlight) {
       return;
@@ -190,7 +206,7 @@ export class WorldScene extends Phaser.Scene {
     this.highlight.strokeRect(target.x * this.tileSize, target.y * this.tileSize, this.tileSize, this.tileSize);
   }
 
-  private readGatherKey(target: GatherTarget | null): void {
+  private readGatherKey(target: ActionTarget | null): void {
     const session = this.game.registry.get(playSessionKey) as PlaySession | undefined;
     if (!session || !this.gatherKey || isTextEntry(document.activeElement)) {
       return;
@@ -201,17 +217,24 @@ export class WorldScene extends Phaser.Scene {
     if (this.game.registry.get(inventoryOpenKey) === true || this.gatherBusy || !target) {
       return;
     }
+    const body = { x: target.x, y: target.y, kind: target.kind };
+    const sendAction = {
+      [ActionKind.Gather]: () => gatherFlower(session.gameId, body),
+      [ActionKind.Strike]: () => strikeTree(session.gameId, body),
+    };
     this.gatherBusy = true;
-    void gatherFlower(session.gameId, { x: target.x, y: target.y, kind: target.kind })
+    void sendAction[target.action]()
       .then((result) => {
         if (!this.alive || !result.ok) {
           return;
         }
         const current = this.game.registry.get(playSessionKey) as PlaySession | undefined;
-        current?.onInventory({
-          capacity: result.data.capacity,
-          slots: result.data.slots ?? [],
-        });
+        if (typeof result.data.capacity === 'number') {
+          current?.onInventory({
+            capacity: result.data.capacity,
+            slots: result.data.slots ?? [],
+          });
+        }
         this.applyMapCell(result.data.cell);
       })
       .catch(() => undefined)
@@ -225,8 +248,31 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     this.world.applyCell(cell);
-    const { cx, cy } = this.world.worldToChunk(cell.x, cell.y);
-    this.redrawChunk(cx, cy);
+    const redraw = Object.keys(cell.layers).some((name) => visualLayers[name]);
+    if (redraw) {
+      const { cx, cy } = this.world.worldToChunk(cell.x, cell.y);
+      this.redrawChunk(cx, cy);
+    }
+    this.paintDurability();
+  }
+
+  private paintDurability(): void {
+    const graphics = this.durabilityBars;
+    const world = this.world;
+    if (!graphics || !world) {
+      return;
+    }
+    graphics.clear();
+    const barWidth = this.tileSize - 8;
+    for (const cell of world.damagedCells()) {
+      const ratio = Math.min(1, cell.remaining / cell.max);
+      const x = cell.x * this.tileSize + 4;
+      const y = cell.y * this.tileSize - 6;
+      graphics.fillStyle(0x1b1b1b, 0.85);
+      graphics.fillRect(x, y, barWidth, 4);
+      graphics.fillStyle(fillColor(ratio), 1);
+      graphics.fillRect(x, y, Math.max(1, Math.round(barWidth * ratio)), 4);
+    }
   }
 
   private redrawChunk(cx: number, cy: number): void {
@@ -410,6 +456,11 @@ const textEntryTags: Record<string, true> = {
   TEXTAREA: true,
   SELECT: true,
 };
+
+function fillColor(ratio: number): number {
+  const found = barFill.find((step) => ratio > step.min);
+  return found?.color ?? barFill[barFill.length - 1].color;
+}
 
 function isTextEntry(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (textEntryTags[target.tagName] === true || target.isContentEditable);

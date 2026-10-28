@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 
@@ -26,10 +27,11 @@ type txBeginner interface {
 type Cells interface {
 	List(ctx context.Context, gameID string) ([]mapstate.Cell, error)
 	ClaimFlora(ctx context.Context, tx pgx.Tx, gameID string, x, y int) (mapstate.FloraClaim, error)
+	Hit(ctx context.Context, tx pgx.Tx, gameID string, x, y, maxDurability, damage int, clear mapstate.Clear) (mapstate.Hit, error)
 }
 
 type Bags interface {
-	Grant(ctx context.Context, tx pgx.Tx, gameID, playerID, slug string) error
+	Grant(ctx context.Context, tx pgx.Tx, gameID, playerID, slug string, quantity int) error
 	ListTx(ctx context.Context, tx pgx.Tx, gameID, playerID string) ([]inventory.Slot, error)
 }
 
@@ -42,6 +44,13 @@ type Presence interface {
 }
 
 type Result struct {
+	Inventory inventory.Inventory
+	Cell      mapstate.Cell
+}
+
+// StrikeResult is one blow. Inventory is set only when Broken is true.
+type StrikeResult struct {
+	Broken    bool
 	Inventory inventory.Inventory
 	Cell      mapstate.Cell
 }
@@ -107,7 +116,7 @@ func (s *Service) Gather(ctx context.Context, gameID, playerID string, x, y int,
 		return Result{}, fmt.Errorf("claim flora %s %d,%d", gameID, x, y)
 	}
 
-	if err := s.bags.Grant(ctx, tx, gameID, playerID, slug); err != nil {
+	if err := s.bags.Grant(ctx, tx, gameID, playerID, slug, 1); err != nil {
 		if errors.Is(err, inventory.ErrBagFull) {
 			return Result{}, ErrBagFull
 		}
@@ -135,5 +144,88 @@ func clearedFlora(x, y int) mapstate.Cell {
 		X:      x,
 		Y:      y,
 		Layers: map[string]*string{mapstate.LayerFlora: nil},
+	}
+}
+
+// Strike spends one bare-hand blow on a destructible node.
+// The cell lock inside Hit is taken before the bag lock inside Grant.
+// A full bag rolls the blow back and leaves the recorded durability in place.
+func (s *Service) Strike(ctx context.Context, gameID, playerID string, x, y int, kind string) (StrikeResult, error) {
+	node, ok := breakable(kind)
+	if !ok {
+		return StrikeResult{}, ErrInvalidKind
+	}
+	if _, err := s.games.Find(ctx, gameID); err != nil {
+		return StrikeResult{}, err
+	}
+	pixelX, pixelY, ok := s.presence.Position(gameID, playerID)
+	if !ok || !inReach(pixelX, pixelY, x, y) {
+		return StrikeResult{}, ErrNotInReach
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return StrikeResult{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	hit, err := s.cells.Hit(ctx, tx, gameID, x, y, node.Max, handDamage, node.Clear)
+	if err != nil {
+		return StrikeResult{}, err
+	}
+	if hit.Gone {
+		return StrikeResult{}, ErrAlreadyTaken
+	}
+
+	var slots []inventory.Slot
+	if hit.Broken {
+		for _, piece := range node.Loot {
+			if err := s.bags.Grant(ctx, tx, gameID, playerID, piece.Slug, piece.Quantity); err != nil {
+				if errors.Is(err, inventory.ErrBagFull) {
+					return StrikeResult{}, ErrBagFull
+				}
+				return StrikeResult{}, err
+			}
+		}
+		slots, err = s.bags.ListTx(ctx, tx, gameID, playerID)
+		if err != nil {
+			return StrikeResult{}, err
+		}
+		if slots == nil {
+			slots = []inventory.Slot{}
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return StrikeResult{}, err
+	}
+
+	cell := brokenNode(x, y, node.Clear)
+	if !hit.Broken {
+		cell = damagedNode(x, y, hit.Remaining)
+	}
+	result := StrikeResult{Broken: hit.Broken, Cell: cell}
+	if hit.Broken {
+		result.Inventory = inventory.Inventory{Capacity: inventory.Capacity, Slots: slots}
+	}
+	return result, nil
+}
+
+func damagedNode(x, y, remaining int) mapstate.Cell {
+	text := strconv.Itoa(remaining)
+	return mapstate.Cell{
+		X:      x,
+		Y:      y,
+		Layers: map[string]*string{mapstate.LayerDurability: &text},
+	}
+}
+
+func brokenNode(x, y int, clear mapstate.Clear) mapstate.Cell {
+	return mapstate.Cell{
+		X: x,
+		Y: y,
+		Layers: map[string]*string{
+			clear.Layer:              clear.Value,
+			mapstate.LayerDurability: nil,
+		},
 	}
 }

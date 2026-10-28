@@ -155,6 +155,90 @@ func TestMapHandler(t *testing.T) {
 		assertErrorCode(t, rec.Body.Bytes(), "invalid_body")
 	})
 
+	t.Run("strike publishes durability", func(t *testing.T) {
+		remaining := "7"
+		journal := &fakeMap{strikeResult: gather.StrikeResult{
+			Cell: mapstate.Cell{X: 4, Y: 5, Layers: map[string]*string{mapstate.LayerDurability: &remaining}},
+		}}
+		publish := &fakePublish{}
+		mux := http.NewServeMux()
+		RegisterMap(mux, journal, &fakeAuth{current: owner}, publish)
+		rec := request(t, mux, http.MethodPost, "/api/games/"+gameID+"/actions/strike", `{"x":4,"y":5,"kind":"tree"}`, cookies)
+		if rec.Code != http.StatusOK || journal.strikes != 1 || journal.kind != "tree" {
+			t.Fatalf("status %d strikes %d kind %s body %s", rec.Code, journal.strikes, journal.kind, rec.Body.String())
+		}
+		var body strikeBody
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Broken || body.Capacity != 0 || body.Slots != nil {
+			t.Fatalf("body %+v", body)
+		}
+		if body.Cell.Layers["durability"] == nil || *body.Cell.Layers["durability"] != "7" {
+			t.Fatalf("cell %+v", body.Cell)
+		}
+		if publish.calls != 1 || publish.env.Type != "map" || publish.room != "game:"+gameID {
+			t.Fatalf("publish %+v", publish)
+		}
+	})
+
+	t.Run("broken tree returns wood", func(t *testing.T) {
+		journal := &fakeMap{strikeResult: gather.StrikeResult{
+			Broken: true,
+			Inventory: inventory.Inventory{
+				Capacity: inventory.Capacity,
+				Slots: []inventory.Slot{{
+					Index: 0, Quantity: 4,
+					Item: inventory.Item{ID: "44444444-4444-4444-4444-444444444444", Slug: "wood", Name: "Древесина", IconKey: "wood", MaxStack: 99},
+				}},
+			},
+			Cell: mapstate.Cell{X: 1, Y: 1, Layers: map[string]*string{
+				mapstate.LayerTree:       nil,
+				mapstate.LayerDurability: nil,
+			}},
+		}}
+		publish := &fakePublish{}
+		mux := http.NewServeMux()
+		RegisterMap(mux, journal, &fakeAuth{current: owner}, publish)
+		rec := request(t, mux, http.MethodPost, "/api/games/"+gameID+"/actions/strike", `{"x":1,"y":1,"kind":"tree"}`, cookies)
+		if rec.Code != http.StatusOK || publish.calls != 1 {
+			t.Fatalf("status %d publishes %d body %s", rec.Code, publish.calls, rec.Body.String())
+		}
+		var body strikeBody
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if !body.Broken || body.Capacity != inventory.Capacity || len(body.Slots) != 1 || body.Slots[0].Quantity != 4 || body.Slots[0].Item.Slug != "wood" {
+			t.Fatalf("body %+v", body)
+		}
+		if body.Cell.Layers["tree"] != nil || body.Cell.Layers["durability"] != nil {
+			t.Fatalf("cell %+v", body.Cell.Layers)
+		}
+	})
+
+	t.Run("strike already taken does not publish", func(t *testing.T) {
+		journal := &fakeMap{err: gather.ErrAlreadyTaken}
+		publish := &fakePublish{}
+		mux := http.NewServeMux()
+		RegisterMap(mux, journal, &fakeAuth{current: owner}, publish)
+		rec := request(t, mux, http.MethodPost, "/api/games/"+gameID+"/actions/strike", `{"x":1,"y":1,"kind":"tree"}`, cookies)
+		if rec.Code != http.StatusConflict || publish.calls != 0 || journal.strikes != 1 {
+			t.Fatalf("status %d publishes %d strikes %d", rec.Code, publish.calls, journal.strikes)
+		}
+		assertErrorCode(t, rec.Body.Bytes(), "already_taken")
+	})
+
+	t.Run("strike invalid body", func(t *testing.T) {
+		journal := &fakeMap{}
+		mux := http.NewServeMux()
+		RegisterMap(mux, journal, &fakeAuth{current: owner}, &fakePublish{})
+		rec := request(t, mux, http.MethodPost, "/api/games/"+gameID+"/actions/strike", `{"x":1,"extra":true}`, cookies)
+		if rec.Code != http.StatusBadRequest || journal.strikes != 0 {
+			t.Fatalf("status %d strikes %d", rec.Code, journal.strikes)
+		}
+		assertErrorCode(t, rec.Body.Bytes(), "invalid_body")
+	})
+
 	t.Run("unauthorized", func(t *testing.T) {
 		journal := &fakeMap{}
 		mux := http.NewServeMux()
@@ -168,16 +252,18 @@ func TestMapHandler(t *testing.T) {
 }
 
 type fakeMap struct {
-	cells    []mapstate.Cell
-	result   gather.Result
-	err      error
-	gameID   string
-	playerID string
-	x        int
-	y        int
-	kind     string
-	lists    int
-	gathers  int
+	cells        []mapstate.Cell
+	result       gather.Result
+	strikeResult gather.StrikeResult
+	err          error
+	gameID       string
+	playerID     string
+	x            int
+	y            int
+	kind         string
+	lists        int
+	gathers      int
+	strikes      int
 }
 
 func (f *fakeMap) List(_ context.Context, gameID string) ([]mapstate.Cell, error) {
@@ -203,6 +289,19 @@ func (f *fakeMap) Gather(_ context.Context, gameID, playerID string, x, y int, k
 		return gather.Result{}, f.err
 	}
 	return f.result, nil
+}
+
+func (f *fakeMap) Strike(_ context.Context, gameID, playerID string, x, y int, kind string) (gather.StrikeResult, error) {
+	f.strikes++
+	f.gameID = gameID
+	f.playerID = playerID
+	f.x = x
+	f.y = y
+	f.kind = kind
+	if f.err != nil {
+		return gather.StrikeResult{}, f.err
+	}
+	return f.strikeResult, nil
 }
 
 type fakePublish struct {

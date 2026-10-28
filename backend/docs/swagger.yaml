@@ -122,19 +122,19 @@ definitions:
   item:
     properties:
       description:
-        example: Сухие ветки
+        example: ""
         type: string
       iconKey:
-        example: item-wood
+        example: wood
         type: string
       id:
         example: 44444444-4444-4444-4444-444444444444
         type: string
       maxStack:
-        example: 20
+        example: 99
         type: integer
       name:
-        example: Дерево
+        example: Древесина
         type: string
       slug:
         example: wood
@@ -168,6 +168,33 @@ definitions:
       login:
         example: player_one
         type: string
+    type: object
+  strikeRequest:
+    properties:
+      kind:
+        example: tree
+        type: string
+      x:
+        example: 4
+        type: integer
+      "y":
+        example: 5
+        type: integer
+    type: object
+  strikeResult:
+    properties:
+      broken:
+        example: false
+        type: boolean
+      capacity:
+        example: 20
+        type: integer
+      cell:
+        $ref: '#/definitions/mapCell'
+      slots:
+        items:
+          $ref: '#/definitions/inventorySlot'
+        type: array
     type: object
 info:
   contact: {}
@@ -486,6 +513,54 @@ paths:
       security:
       - AccessCookie: []
       summary: Собрать цветок
+      tags:
+      - map
+  /api/games/{id}/actions/strike:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID игры
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Клетка и вид объекта
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/strikeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/strikeResult'
+        "400":
+          description: invalid_body, invalid_kind или not_in_reach
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "401":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "404":
+          description: game_not_found
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "409":
+          description: already_taken или bag_full
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - AccessCookie: []
+      summary: Ударить по объекту
       tags:
       - map
   /api/games/{id}/inventory:
