@@ -55,6 +55,23 @@ func (s *Service) Register(router *realtime.Router) {
 	router.Handle("position", s.position)
 }
 
+// Room is the presence channel for one game.
+func Room(gameID string) string {
+	return roomPrefix + gameID
+}
+
+// Position returns the last known pixel position of a player standing in the game.
+// Coordinates live in memory and disappear when the connection closes.
+func (s *Service) Position(gameID, playerID string) (x, y float64, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current := s.occupants[Room(gameID)][playerID]
+	if current == nil {
+		return 0, 0, false
+	}
+	return current.x, current.y, true
+}
+
 func (s *Service) subscribe(ctx context.Context, client *realtime.Client, env realtime.Envelope) error {
 	gameID, err := gameID(env.Room)
 	if err != nil {

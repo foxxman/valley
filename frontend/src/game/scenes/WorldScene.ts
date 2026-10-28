@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { ASSET_URLS, AssetKey } from '../assets';
 import { playSessionKey, type PlaySession } from '../config';
 import { inventoryOpenKey } from '../inventory/open';
+import { gatherFlower } from '../map/api';
+import type { MapCell } from '../map/types';
 import { gameEnv } from '../env';
 import { Player } from '../entities/Player';
 import { RemoteAvatar } from '../entities/RemoteAvatar';
@@ -9,6 +11,7 @@ import { openGameChannel, type GameChannel, type RemotePlayer } from '../net/cha
 import { Minimap, minimapChunkRadius, type MinimapMarker } from '../ui/Minimap';
 import { ChunkWorld } from '../world/chunkWorld';
 import { FLORA_ASSET } from '../world/flora';
+import { gatherTarget, type GatherTarget } from '../world/gatherTarget';
 import { resolveTerrainVisual } from '../world/terrainVisual';
 
 type ChunkVisuals = Phaser.GameObjects.GameObject[];
@@ -42,6 +45,10 @@ export class WorldScene extends Phaser.Scene {
   private positionDue = false;
   private inventoryKey: Phaser.Input.Keyboard.Key | null = null;
   private closeInventoryKey: Phaser.Input.Keyboard.Key | null = null;
+  private gatherKey: Phaser.Input.Keyboard.Key | null = null;
+  private highlight: Phaser.GameObjects.Graphics | null = null;
+  private gatherBusy = false;
+  private alive = true;
 
   constructor() {
     super('WorldScene');
@@ -61,6 +68,7 @@ export class WorldScene extends Phaser.Scene {
     const { tileSize, chunkSize } = gameEnv;
     this.tileSize = tileSize;
     this.world = new ChunkWorld(session.worldSeed, chunkSize);
+    this.world.loadCells(session.cells);
 
     const originCenter = Math.floor(this.world.chunkSize / 2);
     const spawnX = originCenter * tileSize + tileSize / 2;
@@ -88,8 +96,12 @@ export class WorldScene extends Phaser.Scene {
         this.latestRemotes = players;
         this.remotesDirty = true;
       },
+      onMap: (cell) => {
+        this.applyMapCell(cell);
+      },
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.alive = false;
       this.channel?.close();
       this.channel = null;
       for (const avatar of this.remotes.values()) {
@@ -109,9 +121,11 @@ export class WorldScene extends Phaser.Scene {
     }
     this.inventoryKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
     this.closeInventoryKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this.gatherKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+    this.highlight = this.add.graphics().setDepth(9);
 
     this.add
-      .text(12, 12, 'WASD / стрелки — движение\nI — инвентарь', {
+      .text(12, 12, 'WASD / стрелки — движение\nE — действие\nI — инвентарь', {
         fontFamily: 'monospace',
         fontSize: '14px',
         color: '#ffffff',
@@ -139,6 +153,7 @@ export class WorldScene extends Phaser.Scene {
     const tileX = Math.floor(this.player.sprite.x / this.tileSize);
     const tileY = Math.floor(this.player.sprite.y / this.tileSize);
     this.ensureAndDrawAround(tileX, tileY, LOAD_RADIUS_CHUNKS);
+    this.syncTarget();
     this.cullFarChunks(tileX, tileY, DRAW_KEEP_RADIUS_CHUNKS);
     this.minimap?.update(this.world, tileX, tileY, this.selfColor, this.remoteMarkers());
     const dataKeep = Math.max(
@@ -146,6 +161,83 @@ export class WorldScene extends Phaser.Scene {
       minimapChunkRadius(this.world.chunkSize),
     );
     this.world.releaseFarChunks(tileX, tileY, dataKeep + DATA_KEEP_PADDING_CHUNKS);
+  }
+
+  private syncTarget(): void {
+    const target = this.currentTarget();
+    this.paintHighlight(target);
+    this.readGatherKey(target);
+  }
+
+  private currentTarget(): GatherTarget | null {
+    if (!this.player || !this.world) {
+      return null;
+    }
+    return gatherTarget(
+      (x, y) => this.world?.floraAt(x, y) ?? null,
+      Math.floor(this.player.sprite.x / this.tileSize),
+      Math.floor(this.player.sprite.y / this.tileSize),
+      this.player.facing,
+    );
+  }
+
+  private paintHighlight(target: GatherTarget | null): void {
+    this.highlight?.clear();
+    if (!target || !this.highlight) {
+      return;
+    }
+    this.highlight.lineStyle(2, 0xffe08a, 1);
+    this.highlight.strokeRect(target.x * this.tileSize, target.y * this.tileSize, this.tileSize, this.tileSize);
+  }
+
+  private readGatherKey(target: GatherTarget | null): void {
+    const session = this.game.registry.get(playSessionKey) as PlaySession | undefined;
+    if (!session || !this.gatherKey || isTextEntry(document.activeElement)) {
+      return;
+    }
+    if (!Phaser.Input.Keyboard.JustDown(this.gatherKey)) {
+      return;
+    }
+    if (this.game.registry.get(inventoryOpenKey) === true || this.gatherBusy || !target) {
+      return;
+    }
+    this.gatherBusy = true;
+    void gatherFlower(session.gameId, { x: target.x, y: target.y, kind: target.kind })
+      .then((result) => {
+        if (!this.alive || !result.ok) {
+          return;
+        }
+        const current = this.game.registry.get(playSessionKey) as PlaySession | undefined;
+        current?.onInventory({
+          capacity: result.data.capacity,
+          slots: result.data.slots ?? [],
+        });
+        this.applyMapCell(result.data.cell);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        this.gatherBusy = false;
+      });
+  }
+
+  private applyMapCell(cell: MapCell): void {
+    if (!this.alive || !this.world) {
+      return;
+    }
+    this.world.applyCell(cell);
+    const { cx, cy } = this.world.worldToChunk(cell.x, cell.y);
+    this.redrawChunk(cx, cy);
+  }
+
+  private redrawChunk(cx: number, cy: number): void {
+    const key = `${cx},${cy}`;
+    const visuals = this.chunkVisuals.get(key);
+    if (!visuals) {
+      return;
+    }
+    visuals.forEach((visual) => visual.destroy());
+    this.chunkVisuals.delete(key);
+    this.drawChunkIfNeeded(cx, cy);
   }
 
   private readInventoryKeys(): void {

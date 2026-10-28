@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import type { Inventory } from './inventory/types';
+import type { MapCell } from './map/types';
 import { WorldScene } from './scenes/WorldScene';
 
 export type PlaySession = {
@@ -6,8 +8,10 @@ export type PlaySession = {
   worldSeed: number;
   playerId: string;
   login: string;
+  cells: MapCell[];
   onToggleInventory: () => void;
   onCloseInventory: () => void;
+  onInventory: (inventory: Inventory) => void;
 };
 
 export const playSessionKey = 'playSession';

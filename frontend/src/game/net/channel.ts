@@ -1,3 +1,5 @@
+import type { MapCell } from '../map/types';
+
 export type RemotePlayer = {
   playerId: string;
   login: string;
@@ -19,7 +21,7 @@ type Payload = Partial<RemotePlayer> & {
 type Incoming = {
   type?: string;
   room?: string;
-  payload?: Payload;
+  payload?: unknown;
 };
 
 type ChannelOptions = {
@@ -28,6 +30,7 @@ type ChannelOptions = {
   x: number;
   y: number;
   onPresence: (view: PresenceView) => void;
+  onMap: (cell: MapCell) => void;
 };
 
 export type GameChannel = {
@@ -47,7 +50,7 @@ function gameRoom(gameId: string): string {
   return `game:${gameId}`;
 }
 
-export function openGameChannel({ gameId, selfId, x, y, onPresence }: ChannelOptions): GameChannel {
+export function openGameChannel({ gameId, selfId, x, y, onPresence, onMap }: ChannelOptions): GameChannel {
   const room = gameRoom(gameId);
   const place = { x, y };
   const remotes = new Map<string, RemotePlayer>();
@@ -154,7 +157,15 @@ export function openGameChannel({ gameId, selfId, x, y, onPresence }: ChannelOpt
       if (message.room && message.room !== room) {
         return;
       }
-      handlers[message.type ?? '']?.(message.payload ?? {});
+      if (message.type === 'map') {
+        const cell = readMapCell(message.payload);
+        if (cell) {
+          onMap(cell);
+        }
+        return;
+      }
+      const payload = (message.payload ?? {}) as Payload;
+      handlers[message.type ?? '']?.(payload);
     };
     next.onclose = () => {
       if (socket !== next) {
@@ -190,4 +201,24 @@ export function openGameChannel({ gameId, selfId, x, y, onPresence }: ChannelOpt
       socket = null;
     },
   };
+}
+
+function readMapCell(payload: unknown): MapCell | null {
+  if (typeof payload !== 'object' || payload === null) {
+    return null;
+  }
+  const body = payload as { x?: unknown; y?: unknown; layers?: unknown };
+  if (typeof body.x !== 'number' || typeof body.y !== 'number' || !Number.isInteger(body.x) || !Number.isInteger(body.y)) {
+    return null;
+  }
+  if (typeof body.layers !== 'object' || body.layers === null) {
+    return null;
+  }
+  const layers: MapCell['layers'] = {};
+  for (const [name, value] of Object.entries(body.layers as Record<string, unknown>)) {
+    if (typeof value === 'string' || value === null) {
+      layers[name] = value;
+    }
+  }
+  return { x: body.x, y: body.y, layers };
 }

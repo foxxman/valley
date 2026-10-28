@@ -15,10 +15,12 @@ import (
 	"game/backend/internal/config"
 	"game/backend/internal/db"
 	"game/backend/internal/game"
+	"game/backend/internal/gather"
 	"game/backend/internal/health"
 	"game/backend/internal/httpapi"
 	"game/backend/internal/inventory"
 	"game/backend/internal/logger"
+	"game/backend/internal/mapstate"
 	"game/backend/internal/player"
 	"game/backend/internal/presence"
 	"game/backend/internal/realtime"
@@ -65,11 +67,14 @@ func run() error {
 	}
 
 	games := game.NewService(game.NewRepository(pool))
-	bags := inventory.NewService(inventory.NewRepository(pool), games)
+	bagRepo := inventory.NewRepository(pool)
+	bags := inventory.NewService(bagRepo, games)
 	hub := realtime.NewHub()
 	router := realtime.NewRouter()
 	world := presence.New(hub, games)
 	world.Register(router)
+	cells := mapstate.NewRepository(pool)
+	gathering := gather.NewService(pool, cells, bagRepo, games, world)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthcheck", health.NewHandler(pool))
@@ -80,6 +85,7 @@ func run() error {
 	})
 	httpapi.RegisterGames(mux, games, authService)
 	httpapi.RegisterInventory(mux, bags, authService)
+	httpapi.RegisterMap(mux, gathering, authService, hub)
 	httpapi.RegisterRealtime(mux, authService, hub, router, world.Disconnect)
 	httpapi.RegisterSwagger(mux)
 

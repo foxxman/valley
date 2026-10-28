@@ -423,6 +423,81 @@
                 }
             }
         },
+        "/api/games/{id}/actions/gather": {
+            "post": {
+                "security": [
+                    {
+                        "AccessCookie": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "map"
+                ],
+                "summary": "Собрать цветок",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID игры",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Клетка и вид цветка",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/gatherRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/gatherResult"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid_body, invalid_kind или not_in_reach",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "game_not_found",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "already_taken или bag_full",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/games/{id}/inventory": {
             "get": {
                 "security": [
@@ -451,6 +526,57 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/inventory"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "game_not_found",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/games/{id}/map": {
+            "get": {
+                "security": [
+                    {
+                        "AccessCookie": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "map"
+                ],
+                "summary": "Журнал карты",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID игры",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/mapJournal"
                         }
                     },
                     "401": {
@@ -622,6 +748,41 @@
                 }
             }
         },
+        "gatherRequest": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "example": "flower-0"
+                },
+                "x": {
+                    "type": "integer",
+                    "example": 4
+                },
+                "y": {
+                    "type": "integer",
+                    "example": 5
+                }
+            }
+        },
+        "gatherResult": {
+            "type": "object",
+            "properties": {
+                "capacity": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "cell": {
+                    "$ref": "#/definitions/mapCell"
+                },
+                "slots": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/inventorySlot"
+                    }
+                }
+            }
+        },
         "health": {
             "type": "object",
             "properties": {
@@ -692,6 +853,36 @@
                 "slug": {
                     "type": "string",
                     "example": "wood"
+                }
+            }
+        },
+        "mapCell": {
+            "type": "object",
+            "properties": {
+                "layers": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "x": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "y": {
+                    "type": "integer",
+                    "example": 2
+                }
+            }
+        },
+        "mapJournal": {
+            "type": "object",
+            "properties": {
+                "cells": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/mapCell"
+                    }
                 }
             }
         },

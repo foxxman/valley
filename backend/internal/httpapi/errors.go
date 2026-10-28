@@ -8,6 +8,7 @@ import (
 
 	"game/backend/internal/auth"
 	"game/backend/internal/game"
+	"game/backend/internal/gather"
 )
 
 type apiFailure struct {
@@ -25,6 +26,10 @@ var serviceFailures = map[error]apiFailure{
 	game.ErrInvalidSeed:        {status: http.StatusBadRequest, code: "invalid_seed"},
 	game.ErrNotFound:           {status: http.StatusNotFound, code: "game_not_found"},
 	game.ErrForbidden:          {status: http.StatusForbidden, code: "forbidden"},
+	gather.ErrInvalidKind:      {status: http.StatusBadRequest, code: "invalid_kind"},
+	gather.ErrNotInReach:       {status: http.StatusBadRequest, code: "not_in_reach"},
+	gather.ErrAlreadyTaken:     {status: http.StatusConflict, code: "already_taken"},
+	gather.ErrBagFull:          {status: http.StatusConflict, code: "bag_full"},
 }
 
 var errorMessage = map[string]string{
@@ -38,6 +43,10 @@ var errorMessage = map[string]string{
 	"invalid_seed":        "Сид: целое число от 0 до 4 294 967 295",
 	"game_not_found":      "Игра не найдена",
 	"forbidden":           "Менять название может только владелец",
+	"invalid_kind":        "Неизвестный цветок",
+	"not_in_reach":        "Слишком далеко",
+	"already_taken":       "Этот цветок уже сорван",
+	"bag_full":            "Рюкзак полон",
 	"internal":            "Внутренняя ошибка",
 }
 

@@ -34,6 +34,7 @@ export class Player {
   private readonly halfSize: number;
   private readonly baseSize: number;
   private bouncePhase = 0;
+  private facingAxis: { x: -1 | 0 | 1; y: -1 | 0 | 1 } = { x: 0, y: 1 };
 
   constructor({ scene, x, y, world, tileSize }: PlayerOptions) {
     this.world = world;
@@ -60,7 +61,13 @@ export class Player {
     };
   }
 
+  /** Ровно одна ось ненулевая. До первого нажатия взгляд направлен вниз. */
+  get facing(): { x: -1 | 0 | 1; y: -1 | 0 | 1 } {
+    return this.facingAxis;
+  }
+
   update(deltaMs: number): void {
+    this.trackFacing();
     const swim = swimStateAt(this.world, this.sprite.x, this.sprite.y, this.tileSize);
     this.updateBounce(deltaMs, swim);
 
@@ -129,6 +136,32 @@ export class Player {
     this.sprite.setCrop();
     this.sprite.setDisplaySize(this.baseSize * scaleX, this.baseSize * scaleY);
     this.sprite.setOrigin(0.5, 0.5);
+  }
+
+  private trackFacing(): void {
+    const held: Array<{ key: Phaser.Input.Keyboard.Key | undefined; x: -1 | 0 | 1; y: -1 | 0 | 1 }> = [
+      { key: this.wasd.left, x: -1, y: 0 },
+      { key: this.cursors.left, x: -1, y: 0 },
+      { key: this.wasd.right, x: 1, y: 0 },
+      { key: this.cursors.right, x: 1, y: 0 },
+      { key: this.wasd.up, x: 0, y: -1 },
+      { key: this.cursors.up, x: 0, y: -1 },
+      { key: this.wasd.down, x: 0, y: 1 },
+      { key: this.cursors.down, x: 0, y: 1 },
+    ];
+    let latest = -1;
+    let next = this.facingAxis;
+    for (const direction of held) {
+      const key = direction.key;
+      if (!key?.isDown || key.timeDown < latest) {
+        continue;
+      }
+      latest = key.timeDown;
+      next = { x: direction.x, y: direction.y };
+    }
+    if (latest >= 0) {
+      this.facingAxis = next;
+    }
   }
 
   private canOccupy(x: number, y: number): boolean {

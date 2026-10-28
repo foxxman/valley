@@ -9,7 +9,15 @@ import type { Game } from '../games/types';
 import { loadInventory } from './inventory/api';
 import { InventoryModal, type InventoryView } from './inventory/InventoryModal';
 import { inventoryOpenKey } from './inventory/open';
+import type { Inventory } from './inventory/types';
+import { loadMap } from './map/api';
+import type { MapCell } from './map/types';
 import { mountGame } from './mountGame';
+
+type JournalState =
+  | { gameId: string; status: 'loading' }
+  | { gameId: string; status: 'error'; message: string }
+  | { gameId: string; status: 'ready'; cells: MapCell[] };
 
 export function GamePage() {
   const { gameId = '' } = useParams();
@@ -21,11 +29,13 @@ export function GamePage() {
   const inventoryOpenRef = useRef(false);
   const toggleInventoryRef = useRef<() => void>(() => {});
   const closeInventoryRef = useRef<() => void>(() => {});
+  const replaceInventoryRef = useRef<(inventory: Inventory) => void>(() => {});
   const [game, setGame] = useState<Game | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [inventory, setInventory] = useState<InventoryView>({ status: 'loading' });
+  const [journal, setJournal] = useState<JournalState>({ gameId: '', status: 'loading' });
 
   toggleInventoryRef.current = () => {
     const next = !inventoryOpenRef.current;
@@ -40,6 +50,12 @@ export function GamePage() {
     inventoryOpenRef.current = false;
     gameRef.current?.registry.set(inventoryOpenKey, false);
     setInventoryOpen(false);
+  };
+  replaceInventoryRef.current = (next) => {
+    setInventory({
+      status: 'ready',
+      inventory: { capacity: next.capacity, slots: next.slots ?? [] },
+    });
   };
 
   useEffect(() => {
@@ -91,8 +107,34 @@ export function GamePage() {
   }, [game?.id, player?.id]);
 
   useEffect(() => {
+    if (!game) {
+      return;
+    }
+    let cancelled = false;
+    const gameId = game.id;
+    loadMap(gameId).then((result) => {
+      if (cancelled) {
+        return;
+      }
+      if (!result.ok) {
+        setJournal({ gameId, status: 'error', message: result.message });
+        return;
+      }
+      setJournal({ gameId, status: 'ready', cells: result.data.cells ?? [] });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [game?.id]);
+
+  const journalForGame: JournalState =
+    journal.gameId === game?.id ? journal : { gameId: game?.id ?? '', status: 'loading' };
+  const mapCells = journalForGame.status === 'ready' ? journalForGame.cells : null;
+  const mapError = journalForGame.status === 'error' ? journalForGame.message : '';
+
+  useEffect(() => {
     const parent = hostRef.current;
-    if (!parent || !game || !player) {
+    if (!parent || !game || !player || !mapCells) {
       return;
     }
     inventoryOpenRef.current = false;
@@ -102,8 +144,10 @@ export function GamePage() {
       worldSeed: game.worldSeed,
       playerId: player.id,
       login: player.login,
+      cells: mapCells,
       onToggleInventory: () => toggleInventoryRef.current(),
       onCloseInventory: () => closeInventoryRef.current(),
+      onInventory: (next) => replaceInventoryRef.current(next),
     });
     gameRef.current = world;
     return () => {
@@ -111,9 +155,9 @@ export function GamePage() {
       gameRef.current = null;
       world.destroy(true);
     };
-  }, [game?.id, game?.worldSeed, player?.id, player?.login]);
+  }, [game?.id, game?.worldSeed, player?.id, player?.login, mapCells]);
 
-  if (loading) {
+  if (loading || (game && !mapCells && !mapError)) {
     return (
       <main className="screen">
         <p>Загрузка игры…</p>
@@ -121,12 +165,12 @@ export function GamePage() {
     );
   }
 
-  if (error || !game || !player) {
+  if (error || mapError || !game || !player) {
     return (
       <main className="screen">
         <section className="panel">
           <p className="form-error" role="alert">
-            {error || 'Игра не найдена'}
+            {error || mapError || 'Игра не найдена'}
           </p>
           <button type="button" onClick={() => navigate('/lobby')}>
             В лобби

@@ -10,7 +10,7 @@ func TestMigrationFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("files: %v", err)
 	}
-	if len(names) != 4 || names[0] != "001_players.sql" || names[1] != "002_games.sql" || names[2] != "003_game_seed.sql" || names[3] != "004_inventory.sql" {
+	if len(names) != 5 || names[0] != "001_players.sql" || names[1] != "002_games.sql" || names[2] != "003_game_seed.sql" || names[3] != "004_inventory.sql" || names[4] != "005_map.sql" {
 		t.Fatalf("names %v", names)
 	}
 
@@ -81,6 +81,28 @@ func TestMigrationFiles(t *testing.T) {
 	} {
 		if !strings.Contains(inventorySQL, fragment) {
 			t.Fatalf("inventory migration missing %q", fragment)
+		}
+	}
+
+	journal, err := migrationsFS.ReadFile("migrations/005_map.sql")
+	if err != nil {
+		t.Fatalf("read map: %v", err)
+	}
+	journalSQL := string(journal)
+	for _, fragment := range []string{
+		"CREATE TABLE map_cells",
+		"game_id UUID NOT NULL REFERENCES games (id) ON DELETE CASCADE",
+		"value TEXT",
+		"PRIMARY KEY (game_id, x, y, layer)",
+		"CONSTRAINT map_cells_layer CHECK (layer IN ('terrain', 'tree', 'flora', 'feature'))",
+		"('flower-0', 'Цветок I', 'flower-0', '', 99)",
+		"('flower-1', 'Цветок II', 'flower-1', '', 99)",
+		"('flower-2', 'Цветок III', 'flower-2', '', 99)",
+		"('flower-3', 'Цветок IV', 'flower-3', '', 99)",
+		"ON CONFLICT (slug) DO NOTHING",
+	} {
+		if !strings.Contains(journalSQL, fragment) {
+			t.Fatalf("map migration missing %q", fragment)
 		}
 	}
 }

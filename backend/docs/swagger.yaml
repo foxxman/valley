@@ -65,6 +65,30 @@ definitions:
         example: Северная долина
         type: string
     type: object
+  gatherRequest:
+    properties:
+      kind:
+        example: flower-0
+        type: string
+      x:
+        example: 4
+        type: integer
+      "y":
+        example: 5
+        type: integer
+    type: object
+  gatherResult:
+    properties:
+      capacity:
+        example: 20
+        type: integer
+      cell:
+        $ref: '#/definitions/mapCell'
+      slots:
+        items:
+          $ref: '#/definitions/inventorySlot'
+        type: array
+    type: object
   health:
     properties:
       database:
@@ -115,6 +139,26 @@ definitions:
       slug:
         example: wood
         type: string
+    type: object
+  mapCell:
+    properties:
+      layers:
+        additionalProperties:
+          type: string
+        type: object
+      x:
+        example: 1
+        type: integer
+      "y":
+        example: 2
+        type: integer
+    type: object
+  mapJournal:
+    properties:
+      cells:
+        items:
+          $ref: '#/definitions/mapCell'
+        type: array
     type: object
   player:
     properties:
@@ -396,6 +440,54 @@ paths:
       summary: Переименовать игру
       tags:
       - games
+  /api/games/{id}/actions/gather:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID игры
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Клетка и вид цветка
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/gatherRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/gatherResult'
+        "400":
+          description: invalid_body, invalid_kind или not_in_reach
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "401":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "404":
+          description: game_not_found
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "409":
+          description: already_taken или bag_full
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - AccessCookie: []
+      summary: Собрать цветок
+      tags:
+      - map
   /api/games/{id}/inventory:
     get:
       parameters:
@@ -428,6 +520,38 @@ paths:
       summary: Инвентарь игрока
       tags:
       - inventory
+  /api/games/{id}/map:
+    get:
+      parameters:
+      - description: ID игры
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/mapJournal'
+        "401":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "404":
+          description: game_not_found
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - AccessCookie: []
+      summary: Журнал карты
+      tags:
+      - map
   /api/ws:
     get:
       description: Переключение протокола на WebSocket. Каталог событий в эту спецификацию
