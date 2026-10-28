@@ -12,13 +12,16 @@ flowchart TD
   server --> health["internal/health"]
   httpapi --> auth["internal/auth"]
   httpapi --> game["internal/game"]
+  httpapi --> inventory["internal/inventory"]
   httpapi --> realtime["internal/realtime"]
   httpapi --> presence["internal/presence"]
   presence --> realtime
   presence --> game
+  inventory --> game
   auth --> player["internal/player"]
   auth --> db[(PostgreSQL)]
   game --> db
+  inventory --> db
   player --> db
   health --> db
 ```
@@ -34,6 +37,7 @@ flowchart TD
 | `internal/auth` | Регистрация, вход, JWT access, refresh-токены |
 | `internal/player` | Игрок и таблица `players` |
 | `internal/game` | Игры владельца и таблица `games` |
+| `internal/inventory` | Каталог предметов и рюкзак пары игрок + игра |
 | `internal/realtime` | Канал сообщений: соединения, комнаты, рассылка конвертов |
 | `internal/presence` | Кто сейчас в игре и где стоит. Координаты только в памяти процесса |
 | `docs` | Сгенерированная OpenAPI-спека |
@@ -46,6 +50,8 @@ flowchart TD
 
 При создании игры можно передать `worldSeed` — целое число от 0 до 4 294 967 295. Если поле пустое, сервер выбирает сид сам и сохраняет его в игре. Одинаковый сид собирает одну и ту же карту. Уже существующие игры при миграции получают сид `42`, как раньше на клиенте.
 
+Инвентарь принадлежит паре игрок + игра. `GET /api/games/{id}/inventory` возвращает рюкзак текущего игрока: `capacity` (сейчас 20) и `slots`. В списке только занятые ячейки, пустые строки в базе не хранятся. У ячейки есть `index` от 0 до 19, `quantity` и предмет (`id`, `slug`, `name`, `iconKey`, `description`, `maxStack`). Чужой рюкзак не отдаётся. Если игры нет, ответ `game_not_found`. Эндпоинта, которым клиент мог бы выдать себе предмет, нет.
+
 Роуты:
 
 | Метод | Путь | Доступ |
@@ -56,6 +62,7 @@ flowchart TD
 | `GET` | `/api/auth/me` | `access_token` |
 | `POST`, `GET` | `/api/games` | `access_token` |
 | `GET`, `PATCH` | `/api/games/{id}` | `access_token` |
+| `GET` | `/api/games/{id}/inventory` | `access_token`, только свой рюкзак |
 | `GET` | `/api/ws` | `access_token`, переход на WebSocket |
 | `GET` | `/swagger/index.html` | открытый |
 
@@ -92,6 +99,30 @@ flowchart TD
 | `world_seed` | `BIGINT` | от 0 до 4 294 967 295 |
 | `created_at` | `TIMESTAMPTZ` | `now()` |
 | `updated_at` | `TIMESTAMPTZ` | `now()` |
+
+`items` — каталог определений предметов. В миграции таблица пустая.
+
+| Колонка | Тип | Ограничения |
+| --- | --- | --- |
+| `id` | `UUID` | PK, `gen_random_uuid()` |
+| `slug` | `TEXT` | уникальный стабильный код |
+| `name` | `TEXT` | подпись в инвентаре |
+| `icon_key` | `TEXT` | ключ картинки на клиенте |
+| `description` | `TEXT` | текст тултипа, по умолчанию пустая строка |
+| `max_stack` | `INT` | от 1 до 999, по умолчанию 1 |
+| `created_at` | `TIMESTAMPTZ` | `now()` |
+
+`inventory_slots` — занятые ячейки рюкзака. Удаляются вместе с игрой и игроком. Пока предмет лежит в ячейке, строку каталога удалить нельзя.
+
+| Колонка | Тип | Ограничения |
+| --- | --- | --- |
+| `game_id` | `UUID` | FK → `games.id` `ON DELETE CASCADE`, часть PK |
+| `player_id` | `UUID` | FK → `players.id` `ON DELETE CASCADE`, часть PK |
+| `slot_index` | `SMALLINT` | 0–19, часть PK |
+| `item_id` | `UUID` | FK → `items.id` |
+| `quantity` | `INT` | не меньше 1 |
+
+Первичный ключ `(game_id, player_id, slot_index)` и есть индекс выборки рюкзака. Отдельного индекса на эти колонки нет.
 
 `schema_migrations` создаётся кодом, не SQL-файлом: `version TEXT` PK и `applied_at TIMESTAMPTZ`.
 
