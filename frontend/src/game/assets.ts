@@ -16,6 +16,7 @@ export const AssetKey = {
   GrassTuft1: 'grass-tuft-1',
   Wood: 'wood',
   ItemStone: 'stone',
+  Chest: 'chest',
   Player: 'player',
 } as const;
 
@@ -38,5 +39,6 @@ export const ASSET_URLS: Record<AssetKey, string> = {
   [AssetKey.GrassTuft1]: '/assets/vegetation/grass_tuft_1.png',
   [AssetKey.Wood]: '/assets/items/wood.png',
   [AssetKey.ItemStone]: '/assets/items/stone.png',
+  [AssetKey.Chest]: '/assets/items/chest.png',
   [AssetKey.Player]: '/assets/player.png',
 };

@@ -8,6 +8,7 @@ const itemIcons: Record<string, string> = {
   [AssetKey.Flower3]: ASSET_URLS[AssetKey.Flower3],
   [AssetKey.Wood]: ASSET_URLS[AssetKey.Wood],
   [AssetKey.ItemStone]: ASSET_URLS[AssetKey.ItemStone],
+  [AssetKey.Chest]: ASSET_URLS[AssetKey.Chest],
 };
 
 export function itemIconUrl(iconKey: string): string | undefined {

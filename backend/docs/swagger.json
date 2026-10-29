@@ -423,6 +423,81 @@
                 }
             }
         },
+        "/api/games/{id}/actions/craft": {
+            "post": {
+                "security": [
+                    {
+                        "AccessCookie": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "craft"
+                ],
+                "summary": "Создать по рецепту",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID игры",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Код рецепта",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/craftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/inventory"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid_body или unknown_recipe",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "game_not_found",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "missing_ingredients или bag_full",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/games/{id}/actions/gather": {
             "post": {
                 "security": [
@@ -675,6 +750,57 @@
                 }
             }
         },
+        "/api/games/{id}/recipes": {
+            "get": {
+                "security": [
+                    {
+                        "AccessCookie": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "craft"
+                ],
+                "summary": "Список рецептов",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID игры",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/recipeList"
+                        }
+                    },
+                    "401": {
+                        "description": "unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "game_not_found",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/ws": {
             "get": {
                 "security": [
@@ -730,6 +856,15 @@
         }
     },
     "definitions": {
+        "craftRequest": {
+            "type": "object",
+            "properties": {
+                "recipe": {
+                    "type": "string",
+                    "example": "chest"
+                }
+            }
+        },
         "createGame": {
             "type": "object",
             "properties": {
@@ -971,6 +1106,60 @@
                 "login": {
                     "type": "string",
                     "example": "player_one"
+                }
+            }
+        },
+        "recipe": {
+            "type": "object",
+            "properties": {
+                "ingredients": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/recipePart"
+                    }
+                },
+                "result": {
+                    "$ref": "#/definitions/recipePart"
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "chest"
+                }
+            }
+        },
+        "recipeList": {
+            "type": "object",
+            "properties": {
+                "recipes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/recipe"
+                    }
+                }
+            }
+        },
+        "recipePart": {
+            "type": "object",
+            "properties": {
+                "iconKey": {
+                    "type": "string",
+                    "example": "wood"
+                },
+                "maxStack": {
+                    "type": "integer",
+                    "example": 99
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Древесина"
+                },
+                "quantity": {
+                    "type": "integer",
+                    "example": 4
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "wood"
                 }
             }
         },

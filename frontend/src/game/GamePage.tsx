@@ -10,6 +10,9 @@ import { loadInventory } from './inventory/api';
 import { InventoryModal, type InventoryView } from './inventory/InventoryModal';
 import { inventoryOpenKey } from './inventory/open';
 import type { Inventory } from './inventory/types';
+import { loadRecipes } from './craft/api';
+import { CraftModal, type RecipeView } from './craft/CraftModal';
+import { craftOpenKey } from './craft/open';
 import { loadMap } from './map/api';
 import type { MapCell } from './map/types';
 import { mountGame } from './mountGame';
@@ -27,19 +30,29 @@ export function GamePage() {
   const hostRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const inventoryOpenRef = useRef(false);
+  const craftOpenRef = useRef(false);
   const toggleInventoryRef = useRef<() => void>(() => {});
   const closeInventoryRef = useRef<() => void>(() => {});
+  const toggleCraftRef = useRef<() => void>(() => {});
+  const closeCraftRef = useRef<() => void>(() => {});
   const replaceInventoryRef = useRef<(inventory: Inventory) => void>(() => {});
   const [game, setGame] = useState<Game | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [craftOpen, setCraftOpen] = useState(false);
   const [inventory, setInventory] = useState<InventoryView>({ status: 'loading' });
+  const [recipes, setRecipes] = useState<RecipeView>({ status: 'loading' });
   const [journal, setJournal] = useState<JournalState>({ gameId: '', status: 'loading' });
 
   toggleInventoryRef.current = () => {
     const next = !inventoryOpenRef.current;
     inventoryOpenRef.current = next;
+    if (next) {
+      craftOpenRef.current = false;
+      setCraftOpen(false);
+      gameRef.current?.registry.set(craftOpenKey, false);
+    }
     gameRef.current?.registry.set(inventoryOpenKey, next);
     setInventoryOpen(next);
   };
@@ -50,6 +63,25 @@ export function GamePage() {
     inventoryOpenRef.current = false;
     gameRef.current?.registry.set(inventoryOpenKey, false);
     setInventoryOpen(false);
+  };
+  toggleCraftRef.current = () => {
+    const next = !craftOpenRef.current;
+    craftOpenRef.current = next;
+    if (next) {
+      inventoryOpenRef.current = false;
+      setInventoryOpen(false);
+      gameRef.current?.registry.set(inventoryOpenKey, false);
+    }
+    gameRef.current?.registry.set(craftOpenKey, next);
+    setCraftOpen(next);
+  };
+  closeCraftRef.current = () => {
+    if (!craftOpenRef.current) {
+      return;
+    }
+    craftOpenRef.current = false;
+    gameRef.current?.registry.set(craftOpenKey, false);
+    setCraftOpen(false);
   };
   replaceInventoryRef.current = (next) => {
     setInventory({
@@ -107,6 +139,27 @@ export function GamePage() {
   }, [game?.id, player?.id]);
 
   useEffect(() => {
+    if (!game || !player) {
+      return;
+    }
+    let cancelled = false;
+    setRecipes({ status: 'loading' });
+    loadRecipes(game.id).then((result) => {
+      if (cancelled) {
+        return;
+      }
+      if (!result.ok) {
+        setRecipes({ status: 'error', message: result.message });
+        return;
+      }
+      setRecipes({ status: 'ready', recipes: result.data });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [game?.id, player?.id]);
+
+  useEffect(() => {
     if (!game) {
       return;
     }
@@ -138,7 +191,9 @@ export function GamePage() {
       return;
     }
     inventoryOpenRef.current = false;
+    craftOpenRef.current = false;
     setInventoryOpen(false);
+    setCraftOpen(false);
     const world = mountGame(parent, {
       gameId: game.id,
       worldSeed: game.worldSeed,
@@ -147,11 +202,14 @@ export function GamePage() {
       cells: mapCells,
       onToggleInventory: () => toggleInventoryRef.current(),
       onCloseInventory: () => closeInventoryRef.current(),
+      onToggleCraft: () => toggleCraftRef.current(),
+      onCloseCraft: () => closeCraftRef.current(),
       onInventory: (next) => replaceInventoryRef.current(next),
     });
     gameRef.current = world;
     return () => {
       inventoryOpenRef.current = false;
+      craftOpenRef.current = false;
       gameRef.current = null;
       world.destroy(true);
     };
@@ -196,6 +254,15 @@ export function GamePage() {
         </button>
       </div>
       {inventoryOpen ? <InventoryModal view={inventory} onClose={() => closeInventoryRef.current()} /> : null}
+      {craftOpen ? (
+        <CraftModal
+          gameId={game.id}
+          recipes={recipes}
+          inventory={inventory}
+          onClose={() => closeCraftRef.current()}
+          onInventory={(next) => replaceInventoryRef.current(next)}
+        />
+      ) : null}
     </div>
   );
 }

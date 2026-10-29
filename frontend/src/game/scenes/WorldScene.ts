@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ASSET_URLS, AssetKey } from '../assets';
 import { playSessionKey, type PlaySession } from '../config';
-import { inventoryOpenKey } from '../inventory/open';
+import { isPlayPaused } from '../ui/pause';
 import { gatherFlower, strikeTree } from '../map/api';
 import type { MapCell } from '../map/types';
 import { gameEnv } from '../env';
@@ -55,7 +55,8 @@ export class WorldScene extends Phaser.Scene {
   private lastSentAt = Number.NEGATIVE_INFINITY;
   private positionDue = false;
   private inventoryKey: Phaser.Input.Keyboard.Key | null = null;
-  private closeInventoryKey: Phaser.Input.Keyboard.Key | null = null;
+  private craftKey: Phaser.Input.Keyboard.Key | null = null;
+  private closeMenuKey: Phaser.Input.Keyboard.Key | null = null;
   private gatherKey: Phaser.Input.Keyboard.Key | null = null;
   private highlight: Phaser.GameObjects.Graphics | null = null;
   private durabilityBars: Phaser.GameObjects.Graphics | null = null;
@@ -132,14 +133,15 @@ export class WorldScene extends Phaser.Scene {
       throw new Error('Keyboard input is required for the inventory');
     }
     this.inventoryKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
-    this.closeInventoryKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this.craftKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
+    this.closeMenuKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     this.gatherKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     this.highlight = this.add.graphics().setDepth(9);
     this.durabilityBars = this.add.graphics().setDepth(12);
     this.paintDurability();
 
     this.add
-      .text(12, 12, 'WASD / стрелки — движение\nE — собрать или добывать\nI — инвентарь', {
+      .text(12, 12, 'WASD / стрелки — движение\nE — собрать или добывать\nI — инвентарь\nF — крафт', {
         fontFamily: 'monospace',
         fontSize: '14px',
         color: '#ffffff',
@@ -153,7 +155,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
-    this.readInventoryKeys();
+    this.readMenuKeys();
     this.player?.update(delta);
     this.publishPosition(time);
     this.syncRemotes();
@@ -214,7 +216,7 @@ export class WorldScene extends Phaser.Scene {
     if (!Phaser.Input.Keyboard.JustDown(this.gatherKey)) {
       return;
     }
-    if (this.game.registry.get(inventoryOpenKey) === true || this.gatherBusy || !target) {
+    if (isPlayPaused(this.game.registry) || this.gatherBusy || !target) {
       return;
     }
     const body = { x: target.x, y: target.y, kind: target.kind };
@@ -286,7 +288,7 @@ export class WorldScene extends Phaser.Scene {
     this.drawChunkIfNeeded(cx, cy);
   }
 
-  private readInventoryKeys(): void {
+  private readMenuKeys(): void {
     const session = this.game.registry.get(playSessionKey) as PlaySession | undefined;
     if (!session || isTextEntry(document.activeElement)) {
       return;
@@ -294,12 +296,12 @@ export class WorldScene extends Phaser.Scene {
     if (this.inventoryKey && Phaser.Input.Keyboard.JustDown(this.inventoryKey)) {
       session.onToggleInventory();
     }
-    if (
-      this.closeInventoryKey &&
-      Phaser.Input.Keyboard.JustDown(this.closeInventoryKey) &&
-      this.game.registry.get(inventoryOpenKey) === true
-    ) {
+    if (this.craftKey && Phaser.Input.Keyboard.JustDown(this.craftKey)) {
+      session.onToggleCraft();
+    }
+    if (this.closeMenuKey && Phaser.Input.Keyboard.JustDown(this.closeMenuKey) && isPlayPaused(this.game.registry)) {
       session.onCloseInventory();
+      session.onCloseCraft();
     }
   }
 

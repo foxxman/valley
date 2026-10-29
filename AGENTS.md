@@ -25,15 +25,17 @@
 | Ключи текстур мира | `frontend/src/game/assets.ts` |
 | Иконка предмета в рюкзаке | `frontend/src/game/inventory/icons.ts` |
 | Модалка инвентаря | `frontend/src/game/inventory/` |
+| Крафт и рецепты | `frontend/src/game/craft/`, `backend/internal/craft/`. Тултип — `frontend/src/game/ui/Tooltip.tsx` |
 | HTTP журнала, сбора и удара на клиенте | `frontend/src/game/map/api.ts` |
 | Какая клетка под клавишей E | `frontend/src/game/world/gatherTarget.ts` |
 | WebSocket, чужие координаты, конверт `map` | `frontend/src/game/net/channel.ts`, `backend/internal/realtime/`, `backend/internal/presence/` |
 | Сборка процесса | `backend/cmd/server/main.go` |
-| Роуты | `backend/internal/httpapi/` — `auth.go`, `games.go`, `inventory.go`, `map.go`, `realtime.go`, `swagger.go` |
+| Роуты | `backend/internal/httpapi/` — `auth.go`, `games.go`, `inventory.go`, `map.go`, `craft.go`, `realtime.go`, `swagger.go` |
 | Сбор цветка и удар | `backend/internal/gather/nodes.go`, `backend/internal/gather/service.go` |
+| Рецепты | `backend/internal/craft/recipes.go`. Хватит ли места после списания — `backend/internal/inventory/exchange.go` |
 | Журнал клеток | `backend/internal/mapstate/` |
 | Рюкзак и выдача предмета | `backend/internal/inventory/` |
-| Миграции `001`…`007` | `backend/internal/db/migrations/` |
+| Миграции `001`…`008` | `backend/internal/db/migrations/` |
 | Конфиг сервера | `backend/internal/config/config.go`, корневой `.env.example` |
 | Swagger | `GET /swagger/index.html`, спека в `backend/docs/` |
 
@@ -47,10 +49,12 @@
 - Дерево: 10 ударов, дроп 4 `wood`, слой `tree` очищается.
 - Сплошной камень: 20 ударов, дроп 5 `stone`, `terrain` становится `grass`. Осколки не добываются.
 - Цветы `flower-0`…`flower-3` собираются одним запросом, без прочности. Трава и кувшинки не собираются.
+- Сундук: рецепт `chest`, 4 `wood`, в рюкзак кладётся 1 `chest` с `max_stack` 1. Поставить и открыть его нельзя.
+- Крафт проверяет место после списания ингредиентов. Источник правды — `planExchange`. Клиент повторяет ту же проверку в `frontend/src/game/craft/fit.ts`.
 - Дистанция действия: клетка игрока или ортогональный сосед. Тайл 32 px.
 - Рюкзак: 20 ячеек, 5 в ряд, свой у пары игрок + игра.
 - Чанк 16×16. Вход в мир: `GET /api/games/{id}/map`, затем `GET /api/games/{id}/inventory`.
 
 ## Чего в игре нет
 
-Не описывай как готовое: инструменты, использование предметов, постройки, снос прудов, чат, друзей, бой, NPC. Слой `feature` в журнале есть и на карту не рисуется.
+Не описывай как готовое: инструменты, использование предметов, установка и открытие сундука, постройки, снос прудов, чат, друзей, бой, NPC. Слой `feature` в журнале есть и на карту не рисуется.

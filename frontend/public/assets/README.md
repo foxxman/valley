@@ -26,6 +26,7 @@ Organized under `public/assets/`:
 | `vegetation/grass_tuft_1.png` | Grass tuft on land (overlay) | — |
 | `items/wood.png` | Wood item icon (bag only) | — |
 | `items/stone.png` | Stone item icon (bag only), Kenney Tiny Farm | — |
+| `items/chest.png` | Chest item icon (bag only), Kenney Roguelike RPG | — |
 | `player.png` | Player | — |
 
 Source: Kenney Roguelike RPG / Characters (CC0).

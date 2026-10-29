@@ -14,12 +14,15 @@ flowchart TD
   httpapi --> game["internal/game"]
   httpapi --> inventory["internal/inventory"]
   httpapi --> gather["internal/gather"]
+  httpapi --> craft["internal/craft"]
   httpapi --> realtime["internal/realtime"]
   httpapi --> presence["internal/presence"]
   presence --> realtime
   presence --> game
   gather --> mapstate["internal/mapstate"]
   gather --> inventory
+  craft --> inventory
+  craft --> game
   gather --> presence
   gather --> game
   inventory --> game
@@ -46,6 +49,7 @@ flowchart TD
 | `internal/inventory` | Каталог предметов и рюкзак пары игрок + игра |
 | `internal/mapstate` | Журнал клеток `map_cells`: чтение игры, заявка слоя `flora` и удар по прочности внутри чужой транзакции |
 | `internal/gather` | Сбор цветка и удар по дереву или камню: одна транзакция на клетку и рюкзак, проверка дистанции по presence |
+| `internal/craft` | Рецепты и создание предмета: списание ингредиентов и выдача результата в одной транзакции |
 | `internal/realtime` | Канал сообщений: соединения, комнаты, рассылка конвертов |
 | `internal/presence` | Кто сейчас в игре и где стоит. Координаты только в памяти процесса |
 | `docs` | Сгенерированная OpenAPI-спека |
@@ -70,6 +74,8 @@ flowchart TD
 
 Перед чтением ячеек рюкзака берётся transaction-scoped advisory lock по `game_id` и `player_id`: `FOR UPDATE` по пустому рюкзаку ничего не блокирует, и два сбора разных цветов одним игроком могли бы оба занять слот 0. Рюкзак блокируется только после клетки, чтобы не поймать deadlock. `Grant` принимает количество и либо размещает его целиком (сначала существующие пачки до `max_stack`, потом пустые слоты), либо возвращает `bag_full` и не пишет ничего. Если места нет, транзакция откатывается целиком: цветок остаётся на карте, а у объекта сохраняется прежний остаток прочности.
 
+`GET /api/games/{id}/recipes` отдаёт рецепты с именами и иконками из каталога `items`. Сейчас в списке один: `chest`, результат — один сундук, цена — 4 `wood`. `POST /api/games/{id}/actions/craft` принимает `{ "recipe": "chest" }`. В одной транзакции рюкзак блокируется тем же advisory lock, ингредиенты списываются с младших индексов ячеек, затем результат кладётся как `Grant`: сначала существующая пачка до `max_stack`, потом пустой слот. Слот, который обнулился при списании, считается пустым. Если после этого результат не помещается, транзакция откатывается и ответ `bag_full`. Если ингредиентов меньше, чем в рецепте, ответ `missing_ingredients`, рюкзак не меняется. У сундука `max_stack` равен 1, поэтому ему нужна свободная ячейка: пачка ровно из 4 древесины её освобождает, а пачка больше 4 в заполненном рюкзаке — нет. Сундук только лежит в рюкзаке. Конверт `map` не шлётся.
+
 Сервер не пересчитывает сид мира. Пустую траву можно один раз заявить как цветок: первая успешная заявка очистит `flora` и выдаст предмет. Повтор увидит строку и ответит `already_taken`. Первый удар по клетке без строки слоя, который этот объект очищает, тоже верит клиенту. Повтор по уже снятому объекту отвечает `already_taken`.
 
 Роуты:
@@ -86,6 +92,8 @@ flowchart TD
 | `GET` | `/api/games/{id}/map` | `access_token`, журнал клеток этой игры |
 | `POST` | `/api/games/{id}/actions/gather` | `access_token`, сорвать цветок в свой рюкзак |
 | `POST` | `/api/games/{id}/actions/strike` | `access_token`, один удар рукой по дереву или камню |
+| `GET` | `/api/games/{id}/recipes` | `access_token`, список рецептов |
+| `POST` | `/api/games/{id}/actions/craft` | `access_token`, создать предмет в свой рюкзак |
 | `GET` | `/api/ws` | `access_token`, переход на WebSocket |
 | `GET` | `/swagger/index.html` | открытый |
 
@@ -123,7 +131,7 @@ flowchart TD
 | `created_at` | `TIMESTAMPTZ` | `now()` |
 | `updated_at` | `TIMESTAMPTZ` | `now()` |
 
-`items` — каталог определений предметов. Миграция `005_map.sql` добавляет четыре цветка, `006_durability.sql` — древесину, `007_stone.sql` — камень.
+`items` — каталог определений предметов. Миграция `005_map.sql` добавляет четыре цветка, `006_durability.sql` — древесину, `007_stone.sql` — камень, `008_chest.sql` — сундук.
 
 | slug | name | icon_key | max_stack |
 | --- | --- | --- | --- |
@@ -133,6 +141,7 @@ flowchart TD
 | `flower-3` | Цветок IV | `flower-3` | 99 |
 | `wood` | Древесина | `wood` | 99 |
 | `stone` | Камень | `stone` | 99 |
+| `chest` | Сундук | `chest` | 1 |
 
 Повторная вставка безопасна: `ON CONFLICT (slug) DO NOTHING`. Раннер и так применяет файл один раз.
 

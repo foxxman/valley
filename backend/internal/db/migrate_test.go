@@ -10,7 +10,7 @@ func TestMigrationFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("files: %v", err)
 	}
-	if len(names) != 7 || names[0] != "001_players.sql" || names[1] != "002_games.sql" || names[2] != "003_game_seed.sql" || names[3] != "004_inventory.sql" || names[4] != "005_map.sql" || names[5] != "006_durability.sql" || names[6] != "007_stone.sql" {
+	if len(names) != 8 || names[0] != "001_players.sql" || names[1] != "002_games.sql" || names[2] != "003_game_seed.sql" || names[3] != "004_inventory.sql" || names[4] != "005_map.sql" || names[5] != "006_durability.sql" || names[6] != "007_stone.sql" || names[7] != "008_chest.sql" {
 		t.Fatalf("names %v", names)
 	}
 
@@ -133,6 +133,20 @@ func TestMigrationFiles(t *testing.T) {
 	} {
 		if !strings.Contains(stoneSQL, fragment) {
 			t.Fatalf("stone migration missing %q", fragment)
+		}
+	}
+
+	chest, err := migrationsFS.ReadFile("migrations/008_chest.sql")
+	if err != nil {
+		t.Fatalf("read chest: %v", err)
+	}
+	chestSQL := string(chest)
+	for _, fragment := range []string{
+		"('chest', 'Сундук', 'chest', '', 1)",
+		"ON CONFLICT (slug) DO NOTHING",
+	} {
+		if !strings.Contains(chestSQL, fragment) {
+			t.Fatalf("chest migration missing %q", fragment)
 		}
 	}
 }

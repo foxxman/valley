@@ -1,5 +1,11 @@
 basePath: /
 definitions:
+  craftRequest:
+    properties:
+      recipe:
+        example: chest
+        type: string
+    type: object
   createGame:
     properties:
       name:
@@ -167,6 +173,43 @@ definitions:
         type: string
       login:
         example: player_one
+        type: string
+    type: object
+  recipe:
+    properties:
+      ingredients:
+        items:
+          $ref: '#/definitions/recipePart'
+        type: array
+      result:
+        $ref: '#/definitions/recipePart'
+      slug:
+        example: chest
+        type: string
+    type: object
+  recipeList:
+    properties:
+      recipes:
+        items:
+          $ref: '#/definitions/recipe'
+        type: array
+    type: object
+  recipePart:
+    properties:
+      iconKey:
+        example: wood
+        type: string
+      maxStack:
+        example: 99
+        type: integer
+      name:
+        example: Древесина
+        type: string
+      quantity:
+        example: 4
+        type: integer
+      slug:
+        example: wood
         type: string
     type: object
   strikeRequest:
@@ -467,6 +510,54 @@ paths:
       summary: Переименовать игру
       tags:
       - games
+  /api/games/{id}/actions/craft:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID игры
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Код рецепта
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/craftRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/inventory'
+        "400":
+          description: invalid_body или unknown_recipe
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "401":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "404":
+          description: game_not_found
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "409":
+          description: missing_ingredients или bag_full
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - AccessCookie: []
+      summary: Создать по рецепту
+      tags:
+      - craft
   /api/games/{id}/actions/gather:
     post:
       consumes:
@@ -627,6 +718,38 @@ paths:
       summary: Журнал карты
       tags:
       - map
+  /api/games/{id}/recipes:
+    get:
+      parameters:
+      - description: ID игры
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/recipeList'
+        "401":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "404":
+          description: game_not_found
+          schema:
+            $ref: '#/definitions/errorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errorResponse'
+      security:
+      - AccessCookie: []
+      summary: Список рецептов
+      tags:
+      - craft
   /api/ws:
     get:
       description: Переключение протокола на WebSocket. Каталог событий в эту спецификацию

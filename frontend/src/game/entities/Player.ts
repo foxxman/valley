@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { gameEnv } from '../env';
 import { AssetKey } from '../assets';
-import { inventoryOpenKey } from '../inventory/open';
+import { isPlayPaused } from '../ui/pause';
 import type { ChunkWorld } from '../world/chunkWorld';
 import { applySwimCrop, SWIM_SPEED_FACTOR, swimStateAt, type SwimState } from './swim';
 
@@ -71,7 +71,7 @@ export class Player {
     const swim = swimStateAt(this.world, this.sprite.x, this.sprite.y, this.tileSize);
     this.updateBounce(deltaMs, swim);
 
-    if (this.sprite.scene.registry.get(inventoryOpenKey) === true) {
+    if (isPlayPaused(this.sprite.scene.registry)) {
       return;
     }
 

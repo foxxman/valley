@@ -11,6 +11,8 @@ export type PlaySession = {
   cells: MapCell[];
   onToggleInventory: () => void;
   onCloseInventory: () => void;
+  onToggleCraft: () => void;
+  onCloseCraft: () => void;
   onInventory: (inventory: Inventory) => void;
 };
 

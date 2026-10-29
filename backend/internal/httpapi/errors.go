@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"game/backend/internal/auth"
+	"game/backend/internal/craft"
 	"game/backend/internal/game"
 	"game/backend/internal/gather"
 )
@@ -17,19 +18,22 @@ type apiFailure struct {
 }
 
 var serviceFailures = map[error]apiFailure{
-	auth.ErrInvalidLogin:       {status: http.StatusBadRequest, code: "invalid_login"},
-	auth.ErrInvalidPassword:    {status: http.StatusBadRequest, code: "invalid_password"},
-	auth.ErrLoginTaken:         {status: http.StatusConflict, code: "login_taken"},
-	auth.ErrInvalidCredentials: {status: http.StatusUnauthorized, code: "invalid_credentials"},
-	auth.ErrUnauthorized:       {status: http.StatusUnauthorized, code: "unauthorized"},
-	game.ErrInvalidName:        {status: http.StatusBadRequest, code: "invalid_name"},
-	game.ErrInvalidSeed:        {status: http.StatusBadRequest, code: "invalid_seed"},
-	game.ErrNotFound:           {status: http.StatusNotFound, code: "game_not_found"},
-	game.ErrForbidden:          {status: http.StatusForbidden, code: "forbidden"},
-	gather.ErrInvalidKind:      {status: http.StatusBadRequest, code: "invalid_kind"},
-	gather.ErrNotInReach:       {status: http.StatusBadRequest, code: "not_in_reach"},
-	gather.ErrAlreadyTaken:     {status: http.StatusConflict, code: "already_taken"},
-	gather.ErrBagFull:          {status: http.StatusConflict, code: "bag_full"},
+	auth.ErrInvalidLogin:        {status: http.StatusBadRequest, code: "invalid_login"},
+	auth.ErrInvalidPassword:     {status: http.StatusBadRequest, code: "invalid_password"},
+	auth.ErrLoginTaken:          {status: http.StatusConflict, code: "login_taken"},
+	auth.ErrInvalidCredentials:  {status: http.StatusUnauthorized, code: "invalid_credentials"},
+	auth.ErrUnauthorized:        {status: http.StatusUnauthorized, code: "unauthorized"},
+	game.ErrInvalidName:         {status: http.StatusBadRequest, code: "invalid_name"},
+	game.ErrInvalidSeed:         {status: http.StatusBadRequest, code: "invalid_seed"},
+	game.ErrNotFound:            {status: http.StatusNotFound, code: "game_not_found"},
+	game.ErrForbidden:           {status: http.StatusForbidden, code: "forbidden"},
+	gather.ErrInvalidKind:       {status: http.StatusBadRequest, code: "invalid_kind"},
+	gather.ErrNotInReach:        {status: http.StatusBadRequest, code: "not_in_reach"},
+	gather.ErrAlreadyTaken:      {status: http.StatusConflict, code: "already_taken"},
+	gather.ErrBagFull:           {status: http.StatusConflict, code: "bag_full"},
+	craft.ErrUnknownRecipe:      {status: http.StatusBadRequest, code: "unknown_recipe"},
+	craft.ErrMissingIngredients: {status: http.StatusConflict, code: "missing_ingredients"},
+	craft.ErrBagFull:            {status: http.StatusConflict, code: "bag_full"},
 }
 
 var errorMessage = map[string]string{
@@ -47,6 +51,8 @@ var errorMessage = map[string]string{
 	"not_in_reach":        "Слишком далеко",
 	"already_taken":       "Здесь уже ничего нет",
 	"bag_full":            "Рюкзак полон",
+	"unknown_recipe":      "Неизвестный рецепт",
+	"missing_ingredients": "Не хватает ингредиентов",
 	"internal":            "Внутренняя ошибка",
 }
 
